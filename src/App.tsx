@@ -31,7 +31,9 @@ import {
   ChevronRight,
   Zap,
   Star,
-  Users
+  Users,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 const checkIsAdminRoute = () => {
@@ -50,8 +52,19 @@ const checkIsAdminRoute = () => {
 };
 
 export default function App() {
-  // Global Theme Mode
-  const [darkMode, setDarkMode] = useState(false);
+  // Global Theme Mode with localStorage persistence
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedTheme = localStorage.getItem('futureacademy_theme');
+        if (savedTheme !== null) {
+          return savedTheme === 'dark';
+        }
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch {}
+    }
+    return false;
+  });
 
   // App Navigation & Selected Category
   const [activeTab, setActiveTab] = useState<'home' | 'categories' | 'blog' | 'user' | 'admin'>(() => {
@@ -75,7 +88,10 @@ export default function App() {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('futureacademy_categories');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
       } catch {}
     }
     return initialCategories;
@@ -85,7 +101,20 @@ export default function App() {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('futureacademy_mcqs');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // Smart sync: merge any new initialMcqs by ID so every category gets its 10 questions
+            const existingIds = new Set(parsed.map((m: MCQ) => m.id));
+            const missing = initialMcqs.filter(m => !existingIds.has(m.id));
+            if (missing.length > 0) {
+              const merged = [...parsed, ...missing];
+              localStorage.setItem('futureacademy_mcqs', JSON.stringify(merged));
+              return merged;
+            }
+            return parsed;
+          }
+        }
       } catch {}
     }
     return initialMcqs;
@@ -140,12 +169,20 @@ export default function App() {
   const [quizMcqList, setQuizMcqList] = useState<MCQ[]>([]);
   const [legalModalTitle, setLegalModalTitle] = useState<string | null>(null);
 
-  // Apply dark mode class to html element
+  // Apply dark mode class to html and body element and persist in localStorage
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
+      if (document.body) document.body.classList.add('dark');
+      try {
+        localStorage.setItem('futureacademy_theme', 'dark');
+      } catch {}
     } else {
       document.documentElement.classList.remove('dark');
+      if (document.body) document.body.classList.remove('dark');
+      try {
+        localStorage.setItem('futureacademy_theme', 'light');
+      } catch {}
     }
   }, [darkMode]);
 
@@ -278,7 +315,14 @@ export default function App() {
 
     let filtered = [...currentPool];
     if (selectedCategory) {
-      filtered = filtered.filter(m => m.category === selectedCategory || m.subject === selectedCategory);
+      const sel = selectedCategory.toLowerCase();
+      filtered = filtered.filter(
+        m =>
+          m.category.toLowerCase() === sel ||
+          m.category.toLowerCase().includes(sel) ||
+          sel.includes(m.category.toLowerCase()) ||
+          (m.subject && m.subject.toLowerCase().includes(sel))
+      );
     }
     if (difficultyFilter !== 'All') {
       filtered = filtered.filter(m => m.difficulty.toLowerCase() === difficultyFilter.toLowerCase());
@@ -403,7 +447,14 @@ export default function App() {
     }
 
     const pool = allLocalMcqs.length > 0 ? allLocalMcqs : initialMcqs;
-    const catQuestions = pool.filter(m => m.category === catName || m.subject === catName);
+    const catLower = catName.toLowerCase();
+    const catQuestions = pool.filter(
+      m =>
+        m.category.toLowerCase() === catLower ||
+        m.category.toLowerCase().includes(catLower) ||
+        catLower.includes(m.category.toLowerCase()) ||
+        (m.subject && m.subject.toLowerCase().includes(catLower))
+    );
     const chosenPool = catQuestions.length > 0 ? catQuestions : pool;
     const shuffled = [...chosenPool].sort(() => 0.5 - Math.random());
     setQuizTitle(`${catName} Test`);
@@ -455,7 +506,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans transition-colors duration-200 flex flex-col">
+    <div className={`min-h-screen ${darkMode ? 'dark' : ''} bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans transition-colors duration-200 flex flex-col`}>
       {/* Header Navbar */}
       <Header
         settings={settings}
@@ -812,6 +863,23 @@ export default function App() {
         onClose={() => setLegalModalTitle(null)}
         settings={settings}
       />
+
+      {/* Floating Dark / Light Mode Toggle Button (Fixed Bottom-Right) */}
+      <aside aria-label="Theme switcher">
+        <button
+          id="floating-theme-toggle"
+          onClick={() => setDarkMode(prev => !prev)}
+          className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-40 w-12 h-12 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-amber-400 border border-slate-200/90 dark:border-slate-700 shadow-xl hover:shadow-2xl hover:scale-110 active:scale-95 transition-all duration-200 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-emerald-500/50 group backdrop-blur-sm cursor-pointer"
+          title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          aria-label={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {darkMode ? (
+            <Sun className="w-5 h-5 text-amber-400 transition-transform duration-300 group-hover:rotate-45" />
+          ) : (
+            <Moon className="w-5 h-5 text-slate-700 transition-transform duration-300 group-hover:-rotate-12" />
+          )}
+        </button>
+      </aside>
     </div>
   );
 }

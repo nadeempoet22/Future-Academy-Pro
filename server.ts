@@ -393,10 +393,19 @@ async function startServer() {
 
   // 3. Categories & Subcategories API
   app.get('/api/categories', (req, res) => {
-    const categoriesWithCount = categories.map(cat => ({
-      ...cat,
-      questionCount: mcqs.filter(m => m.category?.toLowerCase() === cat.name.toLowerCase()).length
-    }));
+    const categoriesWithCount = categories.map(cat => {
+      const catLower = cat.name.toLowerCase();
+      const count = mcqs.filter(
+        m =>
+          m.category?.toLowerCase() === catLower ||
+          m.category?.toLowerCase().includes(catLower) ||
+          catLower.includes(m.category?.toLowerCase())
+      ).length;
+      return {
+        ...cat,
+        questionCount: count > 0 ? count : cat.questionCount
+      };
+    });
     res.json(categoriesWithCount);
   });
 
