@@ -1,0 +1,2164 @@
+import React, { useState, useEffect } from 'react';
+import { MCQ, Category, SiteSettings } from '../types';
+import {
+  ShieldCheck,
+  Plus,
+  Trash2,
+  Edit,
+  Upload,
+  Download,
+  Settings,
+  BarChart3,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  FileSpreadsheet,
+  Megaphone,
+  Database,
+  Layers,
+  Save,
+  Loader2,
+  Copy,
+  Check,
+  ArrowLeft,
+  ExternalLink,
+  FileText,
+  FileCode,
+  Sparkles,
+  HelpCircle,
+  FolderPlus,
+  Lock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  LogOut,
+  User,
+  Mail
+} from 'lucide-react';
+import Papa from 'papaparse';
+
+interface AdminPanelProps {
+  settings: SiteSettings;
+  categories: Category[];
+  mcqs: MCQ[];
+  initialCategoryForMcq?: string | null;
+  onUpdateSettings: (newSettings: SiteSettings) => void;
+  onRefreshMcqs: () => void;
+  onRefreshCategories: () => void;
+  onExitAdmin?: () => void;
+}
+
+export const AdminPanel: React.FC<AdminPanelProps> = ({
+  settings,
+  categories,
+  mcqs,
+  initialCategoryForMcq,
+  onUpdateSettings,
+  onRefreshMcqs,
+  onRefreshCategories,
+  onExitAdmin
+}) => {
+  const [activeTab, setActiveTab] = useState<'analytics' | 'mcqs' | 'import' | 'categories' | 'ads' | 'security' | 'settings' | 'backup'>('analytics');
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Admin Login Authentication State
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('futureacademy_admin_auth') === 'true' || localStorage.getItem('pakmcqs_admin_auth') === 'true';
+    }
+    return false;
+  });
+  const [adminUser, setAdminUser] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('futureacademy_admin_user') || localStorage.getItem('pakmcqs_admin_user') || 'admin';
+    }
+    return 'admin';
+  });
+  const [adminEmail, setAdminEmail] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('futureacademy_admin_email') || localStorage.getItem('pakmcqs_admin_email') || 'admin@futureacademypro.com';
+    }
+    return 'admin@futureacademypro.com';
+  });
+
+  // Login Form States
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  // Security Credentials Change Form States
+  const [credUsername, setCredUsername] = useState(adminUser);
+  const [credEmail, setCredEmail] = useState(adminEmail);
+  const [credCurrentPass, setCredCurrentPass] = useState('');
+  const [credNewPass, setCredNewPass] = useState('');
+  const [credConfirmPass, setCredConfirmPass] = useState('');
+  const [showCredCurrentPass, setShowCredCurrentPass] = useState(false);
+  const [showCredNewPass, setShowCredNewPass] = useState(false);
+  const [credStatus, setCredStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [credLoading, setCredLoading] = useState(false);
+
+  // MCQ Form Modal State
+  const [showMcqModal, setShowMcqModal] = useState(false);
+  const [editingMcq, setEditingMcq] = useState<MCQ | null>(null);
+
+  const [questionText, setQuestionText] = useState('');
+  const [optA, setOptA] = useState('');
+  const [optB, setOptB] = useState('');
+  const [optC, setOptC] = useState('');
+  const [optD, setOptD] = useState('');
+  const [correctAnswer, setCorrectAnswer] = useState<'A' | 'B' | 'C' | 'D'>('A');
+  const [explanation, setExplanation] = useState('');
+  const [reference, setReference] = useState('');
+  const [selectedCat, setSelectedCat] = useState(categories[0]?.name || 'Pakistan Affairs');
+  const [selectedSubCat, setSelectedSubCat] = useState('');
+  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
+  const [tagsInput, setTagsInput] = useState('');
+
+  // Search & Filters in Admin MCQ Table
+  const [adminSearch, setAdminSearch] = useState('');
+  const [adminCatFilter, setAdminCatFilter] = useState('All');
+
+  // Site Settings Form State
+  const [siteForm, setSiteForm] = useState<SiteSettings>(settings);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Bulk Import State (CSV & JSON)
+  const [bulkTargetCategory, setBulkTargetCategory] = useState<string>('__file__');
+  const [importFormat, setImportFormat] = useState<'csv' | 'json'>('csv');
+  const [importInputMode, setImportInputMode] = useState<'file' | 'text'>('file');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [rawImportText, setRawImportText] = useState<string>('');
+  const [parsedItems, setParsedItems] = useState<any[]>([]);
+  const [parseErrors, setParseErrors] = useState<string[]>([]);
+  const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; message: string; count?: number } | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [copiedJsonTemplate, setCopiedJsonTemplate] = useState(false);
+  const [previewSearch, setPreviewSearch] = useState('');
+
+  // New Category State
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatDesc, setNewCatDesc] = useState('');
+
+  const openAddMcqModal = (defaultCategory?: string) => {
+    setEditingMcq(null);
+    setQuestionText('');
+    setOptA('');
+    setOptB('');
+    setOptC('');
+    setOptD('');
+    setCorrectAnswer('A');
+    setExplanation('');
+    setReference('');
+    setSelectedCat(defaultCategory || categories[0]?.name || 'Pakistan Affairs');
+    setDifficulty('Medium');
+    setTagsInput('');
+    setShowMcqModal(true);
+  };
+
+  useEffect(() => {
+    if (initialCategoryForMcq) {
+      openAddMcqModal(initialCategoryForMcq);
+    }
+  }, [initialCategoryForMcq]);
+
+  // Load latest admin credential info from server
+  useEffect(() => {
+    fetch('/api/admin/credentials-info')
+      .then(res => res.json())
+      .then(data => {
+        if (data.username) {
+          setAdminUser(data.username);
+          setCredUsername(data.username);
+        }
+        if (data.email) {
+          setAdminEmail(data.email);
+          setCredEmail(data.email);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    if (!loginUsername.trim() || !loginPassword.trim()) {
+      setLoginError('Baraye meharbani Username/Email aur Password dono darj karein.');
+      return;
+    }
+
+    setLoginLoading(true);
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usernameOrEmail: loginUsername.trim(),
+          password: loginPassword.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsAdminLoggedIn(true);
+        setAdminUser(data.user.username);
+        setAdminEmail(data.user.email);
+        setCredUsername(data.user.username);
+        setCredEmail(data.user.email);
+        localStorage.setItem('futureacademy_admin_auth', 'true');
+        localStorage.setItem('futureacademy_admin_user', data.user.username);
+        localStorage.setItem('futureacademy_admin_email', data.user.email);
+        localStorage.setItem('pakmcqs_admin_auth', 'true');
+        setLoginPassword('');
+        setLoginError('');
+      } else {
+        setLoginError(data.error || 'Ghalat credentials! Default login: username "admin", password "admin".');
+      }
+    } catch (err: any) {
+      setLoginError('Server connection error. Baraye meharbani dobara koshish karein.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAdminLoggedIn(false);
+    localStorage.removeItem('futureacademy_admin_auth');
+    localStorage.removeItem('pakmcqs_admin_auth');
+    setLoginPassword('');
+    setLoginError('');
+  };
+
+  const handleQuickFillDefault = () => {
+    setLoginUsername('admin');
+    setLoginPassword('admin');
+    setLoginError('');
+  };
+
+  const handleChangeCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCredStatus(null);
+
+    if (!credCurrentPass) {
+      setCredStatus({ type: 'error', message: 'Mojooda (Current) Password enter karna zaroori hai.' });
+      return;
+    }
+    if (credNewPass && credNewPass !== credConfirmPass) {
+      setCredStatus({ type: 'error', message: 'Naya Password aur Confirm Password aapas mein match nahi kar rahe.' });
+      return;
+    }
+    if (credNewPass && credNewPass.length < 3) {
+      setCredStatus({ type: 'error', message: 'Naya Password kam az kam 3 characters ka hona chahiye.' });
+      return;
+    }
+
+    setCredLoading(true);
+    try {
+      const res = await fetch('/api/admin/change-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: credCurrentPass,
+          newUsername: credUsername.trim() || undefined,
+          newEmail: credEmail.trim() || undefined,
+          newPassword: credNewPass.trim() || undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCredStatus({
+          type: 'success',
+          message: 'Admin login credentials kamyabi se update ho gaye! Agli martaba login ke liye yeh naya username aur password istemal karein.'
+        });
+        setAdminUser(data.user.username);
+        setAdminEmail(data.user.email);
+        localStorage.setItem('futureacademy_admin_user', data.user.username);
+        localStorage.setItem('futureacademy_admin_email', data.user.email);
+        localStorage.setItem('pakmcqs_admin_user', data.user.username);
+        localStorage.setItem('pakmcqs_admin_email', data.user.email);
+        setCredCurrentPass('');
+        setCredNewPass('');
+        setCredConfirmPass('');
+      } else {
+        setCredStatus({
+          type: 'error',
+          message: data.error || 'Credentials update karne mein masla paish aaya.'
+        });
+      }
+    } catch (err: any) {
+      setCredStatus({ type: 'error', message: 'Server connection error.' });
+    } finally {
+      setCredLoading(false);
+    }
+  };
+
+  const openEditMcqModal = (m: MCQ) => {
+    setEditingMcq(m);
+    setQuestionText(m.question);
+    setOptA(m.options[0]?.text || '');
+    setOptB(m.options[1]?.text || '');
+    setOptC(m.options[2]?.text || '');
+    setOptD(m.options[3]?.text || '');
+    setCorrectAnswer(m.correctAnswer);
+    setExplanation(m.explanation);
+    setReference(m.reference || '');
+    setSelectedCat(m.category);
+    setSelectedSubCat(m.subcategory || '');
+    setDifficulty(m.difficulty);
+    setTagsInput(m.tags.join(', '));
+    setShowMcqModal(true);
+  };
+
+  const handleSaveMcq = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const payload = {
+      question: questionText,
+      options: [
+        { id: 'A', text: optA },
+        { id: 'B', text: optB },
+        { id: 'C', text: optC },
+        { id: 'D', text: optD }
+      ],
+      correctAnswer,
+      explanation,
+      reference,
+      category: selectedCat,
+      subcategory: selectedSubCat,
+      difficulty,
+      subject: selectedCat,
+      tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean)
+    };
+
+    try {
+      if (editingMcq) {
+        await fetch(`/api/mcqs/${editingMcq.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        await fetch('/api/mcqs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+      setShowMcqModal(false);
+      onRefreshMcqs();
+      onRefreshCategories();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteMcq = async (id: string) => {
+    if (confirm('Are you sure you want to delete this MCQ?')) {
+      try {
+        await fetch(`/api/mcqs/${id}`, { method: 'DELETE' });
+        onRefreshMcqs();
+        onRefreshCategories();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(siteForm)
+      });
+      onUpdateSettings(siteForm);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Parse CSV or JSON content string
+  const parseRawContent = (content: string, format: 'csv' | 'json', targetCat: string) => {
+    const errors: string[] = [];
+    let items: any[] = [];
+
+    if (!content.trim()) {
+      setParsedItems([]);
+      setParseErrors([]);
+      return;
+    }
+
+    if (format === 'json') {
+      try {
+        const parsed = JSON.parse(content);
+        const rawArray = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed.items)
+          ? parsed.items
+          : Array.isArray(parsed.questions)
+          ? parsed.questions
+          : Array.isArray(parsed.mcqs)
+          ? parsed.mcqs
+          : [];
+
+        if (!Array.isArray(rawArray) || rawArray.length === 0) {
+          errors.push('JSON data must be an array of questions or contain an "items" / "questions" array.');
+        } else {
+          items = rawArray.map((row: any, idx: number) => {
+            const q = row.question || row.Question || row.title || '';
+            if (!q) {
+              errors.push(`Item #${idx + 1}: Missing question text.`);
+            }
+
+            let options = row.options;
+            if (!Array.isArray(options) || options.length === 0) {
+              options = [
+                { id: 'A', text: row.optionA || row.OptionA || row.A || row.optA || '' },
+                { id: 'B', text: row.optionB || row.OptionB || row.B || row.optB || '' },
+                { id: 'C', text: row.optionC || row.OptionC || row.C || row.optC || '' },
+                { id: 'D', text: row.optionD || row.OptionD || row.D || row.optD || '' }
+              ];
+            }
+
+            const rawAns = (row.correctAnswer || row.CorrectAnswer || row.answer || row.Answer || 'A').toString().trim().toUpperCase();
+            const validAns = ['A', 'B', 'C', 'D'].includes(rawAns) ? rawAns : 'A';
+
+            const finalCat = targetCat !== '__file__'
+              ? targetCat
+              : (row.category || row.Category || 'General Knowledge');
+
+            return {
+              question: q,
+              options,
+              correctAnswer: validAns,
+              explanation: row.explanation || row.Explanation || 'Answer verified by subject expert.',
+              reference: row.reference || row.Reference || 'JSON Bulk Import',
+              category: finalCat,
+              subcategory: row.subcategory || row.Subcategory || '',
+              difficulty: row.difficulty || row.Difficulty || 'Medium'
+            };
+          });
+        }
+      } catch (e: any) {
+        errors.push(`JSON syntax error: ${e.message}`);
+      }
+    } else {
+      // CSV format via Papa
+      try {
+        const results = Papa.parse(content, {
+          header: true,
+          skipEmptyLines: true
+        });
+
+        if (results.errors && results.errors.length > 0) {
+          results.errors.slice(0, 3).forEach(err => errors.push(`CSV Line ${err.row}: ${err.message}`));
+        }
+
+        items = results.data.map((row: any, idx: number) => {
+          const q = row.Question || row.question || row.Title || '';
+          if (!q) {
+            errors.push(`Row ${idx + 1}: Missing question text.`);
+          }
+
+          const optA = row.OptionA || row.optionA || row.A || row.optA || '';
+          const optB = row.OptionB || row.optionB || row.B || row.optB || '';
+          const optC = row.OptionC || row.optionC || row.C || row.optC || '';
+          const optD = row.OptionD || row.optionD || row.D || row.optD || '';
+
+          const rawAns = (row.CorrectAnswer || row.correctAnswer || row.Answer || row.answer || 'A').toString().trim().toUpperCase();
+          const validAns = ['A', 'B', 'C', 'D'].includes(rawAns) ? rawAns : 'A';
+
+          const finalCat = targetCat !== '__file__'
+            ? targetCat
+            : (row.Category || row.category || 'General Knowledge');
+
+          return {
+            question: q,
+            options: [
+              { id: 'A', text: optA },
+              { id: 'B', text: optB },
+              { id: 'C', text: optC },
+              { id: 'D', text: optD }
+            ],
+            correctAnswer: validAns,
+            explanation: row.Explanation || row.explanation || 'Answer verified by subject expert.',
+            reference: row.Reference || row.reference || 'CSV Bulk Import',
+            category: finalCat,
+            subcategory: row.Subcategory || row.subcategory || '',
+            difficulty: row.Difficulty || row.difficulty || 'Medium'
+          };
+        });
+      } catch (e: any) {
+        errors.push(`CSV parsing error: ${e.message}`);
+      }
+    }
+
+    setParsedItems(items.filter(it => it.question));
+    setParseErrors(errors);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setImportFile(file);
+      setImportStatus(null);
+
+      const isJson = file.name.toLowerCase().endsWith('.json');
+      const detectedFormat = isJson ? 'json' : 'csv';
+      setImportFormat(detectedFormat);
+
+      const reader = new FileReader();
+      reader.onload = evt => {
+        const text = (evt.target?.result as string) || '';
+        setRawImportText(text);
+        parseRawContent(text, detectedFormat, bulkTargetCategory);
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleRawTextChange = (text: string) => {
+    setRawImportText(text);
+    setImportStatus(null);
+    parseRawContent(text, importFormat, bulkTargetCategory);
+  };
+
+  const handleFormatChange = (fmt: 'csv' | 'json') => {
+    setImportFormat(fmt);
+    if (rawImportText) {
+      parseRawContent(rawImportText, fmt, bulkTargetCategory);
+    }
+  };
+
+  const handleTargetCategoryChange = (catName: string) => {
+    setBulkTargetCategory(catName);
+    if (parsedItems.length > 0) {
+      setParsedItems(prev =>
+        prev.map(item => ({
+          ...item,
+          category: catName !== '__file__' ? catName : item.category
+        }))
+      );
+    }
+  };
+
+  const handleProcessBulkImport = async () => {
+    if (parsedItems.length === 0) return;
+    setImportLoading(true);
+    setImportStatus(null);
+
+    try {
+      const res = await fetch('/api/mcqs/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: parsedItems,
+          targetCategory: bulkTargetCategory !== '__file__' ? bulkTargetCategory : undefined
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setImportStatus({
+          type: 'success',
+          message: data.message || `Successfully imported ${parsedItems.length} MCQs!`,
+          count: data.addedCount || parsedItems.length
+        });
+        setImportFile(null);
+        setRawImportText('');
+        setParsedItems([]);
+        onRefreshMcqs();
+        onRefreshCategories();
+      } else {
+        setImportStatus({
+          type: 'error',
+          message: data.error || 'Failed to import MCQs into database.'
+        });
+      }
+    } catch (err: any) {
+      setImportStatus({
+        type: 'error',
+        message: err.message || 'Error occurred while importing questions.'
+      });
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleDownloadSampleCsv = () => {
+    const sampleCsv = `Question,OptionA,OptionB,OptionC,OptionD,CorrectAnswer,Explanation,Category,Difficulty
+"Who was the first Prime Minister of Pakistan?","Liaquat Ali Khan","Khawaja Nazimuddin","Ayub Khan","Ghulam Muhammad","A","Liaquat Ali Khan was sworn in on 15 August 1947.","Pakistan Affairs","Easy"
+"What is the SI unit of electric current?","Volt","Ampere","Ohm","Watt","B","Ampere is the base SI unit of electric current.","Everyday Science","Easy"
+"In which year was the objective resolution passed?","1947","1948","1949","1950","C","The Objectives Resolution was adopted by the Constituent Assembly on 12 March 1949.","Pakistan Affairs","Medium"
+"Which data structure operates on LIFO principle?","Queue","Stack","Array","Tree","B","Stack follows Last In First Out (LIFO).","Computer Science","Easy"`;
+
+    const blob = new Blob([sampleCsv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `FutureAcademyPro_${bulkTargetCategory !== '__file__' ? bulkTargetCategory.replace(/\\s+/g, '_') : 'Sample'}_Import.csv`;
+    a.click();
+  };
+
+  const sampleJsonData = [
+    {
+      question: "Which pass connects Pakistan with China?",
+      options: [
+        { id: "A", text: "Khyber Pass" },
+        { id: "B", text: "Khunjerab Pass" },
+        { id: "C", text: "Bolan Pass" },
+        { id: "D", text: "Tochi Pass" }
+      ],
+      correctAnswer: "B",
+      explanation: "Khunjerab Pass is the highest paved international border crossing connecting Pakistan with China.",
+      category: bulkTargetCategory !== '__file__' ? bulkTargetCategory : "Pakistan Affairs",
+      difficulty: "Easy"
+    },
+    {
+      question: "What does CPU stand for?",
+      optionA: "Central Process Unit",
+      optionB: "Central Processing Unit",
+      optionC: "Computer Personal Unit",
+      optionD: "Control Processing Unit",
+      correctAnswer: "B",
+      explanation: "CPU stands for Central Processing Unit and executes computer programs.",
+      category: bulkTargetCategory !== '__file__' ? bulkTargetCategory : "Computer Science",
+      difficulty: "Easy"
+    }
+  ];
+
+  const handleDownloadSampleJson = () => {
+    const jsonStr = JSON.stringify(sampleJsonData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `FutureAcademyPro_${bulkTargetCategory !== '__file__' ? bulkTargetCategory.replace(/\\s+/g, '_') : 'Sample'}_Import.json`;
+    a.click();
+  };
+
+  const handleCopySampleJson = () => {
+    const jsonStr = JSON.stringify(sampleJsonData, null, 2);
+    navigator.clipboard.writeText(jsonStr);
+    setCopiedJsonTemplate(true);
+    setTimeout(() => setCopiedJsonTemplate(false), 2500);
+  };
+
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+
+    try {
+      await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCatName,
+          description: newCatDesc,
+          iconName: 'BookOpen'
+        })
+      });
+      setNewCatName('');
+      setNewCatDesc('');
+      onRefreshCategories();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDownloadBackup = async () => {
+    const res = await fetch('/api/admin/backup');
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `FutureAcademyPro_Full_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+  };
+
+  const filteredAdminMcqs = mcqs.filter(m => {
+    const matchCat = adminCatFilter === 'All' || m.category.toLowerCase() === adminCatFilter.toLowerCase();
+    const matchSearch =
+      m.question.toLowerCase().includes(adminSearch.toLowerCase()) ||
+      m.category.toLowerCase().includes(adminSearch.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  // If Admin is NOT authenticated, display modern Admin Login Screen
+  if (!isAdminLoggedIn) {
+    return (
+      <div className="py-12 px-4 flex items-center justify-center min-h-[75vh]">
+        <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-7 sm:p-8 space-y-6">
+          {/* Header */}
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-inner">
+              <Lock className="w-8 h-8" />
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+              Admin Portal Login
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Future Academy Pro Admin Control Panel tak rasai ke liye credentials darj karein.
+            </p>
+          </div>
+
+          {/* Default Credentials Notice with 1-Click Auto Fill */}
+          <div className="bg-gradient-to-r from-emerald-50/80 to-teal-50/80 dark:from-emerald-950/40 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl p-4 text-xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" /> Default Credentials:
+              </span>
+              <button
+                type="button"
+                onClick={handleQuickFillDefault}
+                className="text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg transition shadow-xs cursor-pointer"
+                title="Click to automatically fill default username and password"
+              >
+                Auto-Fill
+              </button>
+            </div>
+            <div className="font-mono text-[11px] text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-emerald-500/20 flex items-center justify-between">
+              <span>Username: <strong className="font-bold text-emerald-900 dark:text-emerald-200">admin</strong></span>
+              <span>Password: <strong className="font-bold text-emerald-900 dark:text-emerald-200">admin</strong></span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              ℹ️ Login hone ke baad aap &quot;Security & Password&quot; tab mein ja kar apna username aur password ba-asani badal sakte hain.
+            </p>
+          </div>
+
+          {/* Error Message */}
+          {loginError && (
+            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800/50 rounded-xl text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          {/* Login Form */}
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-slate-400" /> Username ya Email
+              </label>
+              <input
+                type="text"
+                required
+                value={loginUsername}
+                onChange={e => setLoginUsername(e.target.value)}
+                placeholder="e.g. admin"
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-slate-400" /> Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  required
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  placeholder="Enter admin password"
+                  className="w-full px-4 py-3 pr-11 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                  title={showLoginPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-3.5 rounded-xl shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+            >
+              {loginLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Logging in...</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span>Login to Admin Panel</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Back to Website */}
+          {onExitAdmin && (
+            <div className="pt-2 text-center border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={onExitAdmin}
+                className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition inline-flex items-center gap-1.5 font-semibold py-1 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Back to Website
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="py-8 space-y-8">
+      {/* Admin Top Banner */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold">Admin Control Center</h1>
+                <span className="text-[10px] uppercase font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md tracking-wider">
+                  Secret Mode
+                </span>
+                <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                  Active Admin: {adminUser}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Manage website name, MCQs, bulk import/export, categories, and AdSense monetization.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+            {onExitAdmin && (
+              <button
+                onClick={onExitAdmin}
+                className="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
+                title="Return to public website"
+              >
+                <ArrowLeft className="w-4 h-4" /> Exit to Website
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex-1 sm:flex-none bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5"
+              title="Log out of Admin Panel"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Logout
+            </button>
+
+            <button
+              onClick={() => openAddMcqModal()}
+              className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20"
+            >
+              <Plus className="w-4 h-4" /> Add Single MCQ
+            </button>
+          </div>
+        </div>
+
+        {/* Secret Admin Link Bar */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-slate-300 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Admin Panel Secret Direct Link:</span>
+            </div>
+            <p className="text-slate-400 text-[11px]">
+              Yeh link frontend screen par aam visitors ko nahi dikhega. Sirf is link ya <code className="text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded">/#admin</code> ya <code className="text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded">/admin</code> lagane par he Admin Panel open hoga.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl text-emerald-400 font-mono text-[11px] truncate max-w-xs sm:max-w-md">
+              {typeof window !== 'undefined' ? `${window.location.origin}/#admin` : '/#admin'}
+            </div>
+            <button
+              onClick={() => {
+                const adminUrl = typeof window !== 'undefined' ? `${window.location.origin}/#admin` : '/#admin';
+                navigator.clipboard.writeText(adminUrl);
+                setCopiedLink(true);
+                setTimeout(() => setCopiedLink(false), 3000);
+              }}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shrink-0 border border-slate-700 text-xs"
+              title="Copy secret admin link"
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-400">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-slate-300" />
+                  <span>Copy Link</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs Header */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 text-xs font-bold">
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'analytics'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" /> Analytics Overview
+        </button>
+
+        <button
+          onClick={() => setActiveTab('mcqs')}
+          className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'mcqs'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Layers className="w-4 h-4" /> Manage MCQs ({mcqs.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('import')}
+          className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'import'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" /> Bulk Import / Export
+        </button>
+
+        <button
+          onClick={() => setActiveTab('categories')}
+          className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'categories'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Plus className="w-4 h-4" /> Categories ({categories.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('ads')}
+          className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'ads'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Megaphone className="w-4 h-4" /> AdSense Ads
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'settings'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Settings className="w-4 h-4" /> Site Settings
+        </button>
+
+        <button
+          onClick={() => setActiveTab('security')}
+          className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'security'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <KeyRound className="w-4 h-4" /> Security & Password
+        </button>
+
+        <button
+          onClick={() => setActiveTab('backup')}
+          className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'backup'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Database className="w-4 h-4" /> Backup Database
+        </button>
+      </div>
+
+      {/* Tab: Analytics Overview */}
+      {activeTab === 'analytics' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Total MCQs</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-1">
+              {mcqs.length}
+            </span>
+          </div>
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Total Categories</span>
+            <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 block mt-1">
+              {categories.length}
+            </span>
+          </div>
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Quizzes Attempted</span>
+            <span className="text-2xl font-black text-amber-500 block mt-1">12,840+</span>
+          </div>
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Active Users Today</span>
+            <span className="text-2xl font-black text-indigo-500 block mt-1">1,420</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Manage MCQs Table */}
+      {activeTab === 'mcqs' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5">
+          {/* Quick Category MCQ Creation Bar */}
+          <div className="bg-emerald-950/20 dark:bg-emerald-950/40 rounded-2xl p-4 border border-emerald-500/20 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
+              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                <Plus className="w-4 h-4" /> Quick Add MCQ by Category:
+              </span>
+              <span className="text-[11px] font-normal text-slate-400">Click any category button below to open builder for that category</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {categories.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => openAddMcqModal(c.name)}
+                  className="bg-white dark:bg-slate-900 hover:bg-emerald-600 dark:hover:bg-emerald-600 hover:text-white dark:hover:text-white border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>{c.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative flex-1 w-full">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={adminSearch}
+                onChange={e => setAdminSearch(e.target.value)}
+                placeholder="Filter questions..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
+              />
+            </div>
+
+            <select
+              value={adminCatFilter}
+              onChange={e => setAdminCatFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
+            >
+              <option value="All">All Categories</option>
+              {categories.map(c => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-400 font-bold uppercase">
+                  <th className="p-3">Question</th>
+                  <th className="p-3">Category</th>
+                  <th className="p-3">Answer</th>
+                  <th className="p-3">Difficulty</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredAdminMcqs.map(m => (
+                  <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td className="p-3 font-medium text-slate-800 dark:text-slate-200 max-w-md truncate">
+                      {m.question}
+                    </td>
+                    <td className="p-3 text-slate-500">{m.category}</td>
+                    <td className="p-3 font-bold text-emerald-600">{m.correctAnswer}</td>
+                    <td className="p-3 text-slate-500">{m.difficulty}</td>
+                    <td className="p-3 text-right space-x-2">
+                      <button
+                        onClick={() => openEditMcqModal(m)}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMcq(m.id)}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-rose-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Bulk Import / Export (CSV & JSON) */}
+      {activeTab === 'import' && (
+        <div className="space-y-6">
+          {/* Header & Template Download Cards */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Bulk CSV / JSON MCQ Importer
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Upload or paste hundreds of questions at once and assign them directly to any subject category.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadSampleCsv}
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 border border-slate-200/60 dark:border-slate-700/60"
+                title="Download CSV format template"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" /> Sample CSV
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadSampleJson}
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 border border-slate-200/60 dark:border-slate-700/60"
+                title="Download JSON format template"
+              >
+                <Download className="w-3.5 h-3.5 text-blue-600" /> Sample JSON
+              </button>
+              <button
+                type="button"
+                onClick={handleCopySampleJson}
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 border border-slate-200/60 dark:border-slate-700/60"
+                title="Copy sample JSON structure to clipboard"
+              >
+                {copiedJsonTemplate ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-500" /> Copy JSON
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Step 1: Target Category Selector */}
+          <div className="bg-gradient-to-r from-emerald-50/70 via-white to-slate-50 dark:from-emerald-950/20 dark:via-slate-900 dark:to-slate-900 rounded-2xl border border-emerald-200/70 dark:border-emerald-800/40 p-5 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">
+                  1
+                </span>
+                <label htmlFor="bulk-target-category" className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                  Target Subject Category for This Batch
+                </label>
+              </div>
+
+              <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-900/40 px-2.5 py-0.5 rounded-full">
+                {bulkTargetCategory === '__file__' ? 'Auto-Detect (From File)' : `Target: ${bulkTargetCategory}`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              <div className="md:col-span-2">
+                <select
+                  id="bulk-target-category"
+                  value={bulkTargetCategory}
+                  onChange={e => handleTargetCategoryChange(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="__file__">
+                    📁 Keep Category Specified in File (Auto-Detect Individual Categories)
+                  </option>
+                  <optgroup label="Assign ALL questions in batch to a specific category:">
+                    {categories.map(c => (
+                      <option key={c.id} value={c.name}>
+                        📂 {c.name} ({c.questionCount} current MCQs)
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center">
+                {bulkTargetCategory === '__file__' ? (
+                  <span>Each question will use its own category defined in the uploaded file/JSON.</span>
+                ) : (
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                    ✓ All questions in this upload will be placed into &quot;{bulkTargetCategory}&quot;.
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Category Pills */}
+            <div className="pt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-200/60 dark:border-slate-800">
+              <span className="text-[11px] text-slate-400 font-medium mr-1">Quick Select:</span>
+              <button
+                type="button"
+                onClick={() => handleTargetCategoryChange('__file__')}
+                className={`text-[11px] px-2.5 py-1 rounded-lg transition font-medium ${
+                  bulkTargetCategory === '__file__'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                Auto (From File)
+              </button>
+              {categories.slice(0, 7).map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => handleTargetCategoryChange(c.name)}
+                  className={`text-[11px] px-2.5 py-1 rounded-lg transition font-medium ${
+                    bulkTargetCategory === c.name
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Step 2: Upload File or Paste Raw Text */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">
+                  2
+                </span>
+                <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                  Select Format & Input Method
+                </span>
+              </div>
+
+              {/* Mode & Format Pickers */}
+              <div className="flex items-center gap-3">
+                {/* Format selection */}
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => handleFormatChange('csv')}
+                    className={`text-xs px-3 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+                      importFormat === 'csv'
+                        ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" /> CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleFormatChange('json')}
+                    className={`text-xs px-3 py-1 rounded-lg font-bold transition flex items-center gap-1 ${
+                      importFormat === 'json'
+                        ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <FileCode className="w-3.5 h-3.5" /> JSON
+                  </button>
+                </div>
+
+                {/* Input mode selection */}
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setImportInputMode('file')}
+                    className={`text-xs px-3 py-1 rounded-lg font-semibold transition ${
+                      importInputMode === 'file'
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Upload File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportInputMode('text')}
+                    className={`text-xs px-3 py-1 rounded-lg font-semibold transition ${
+                      importInputMode === 'text'
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Paste Text
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Input Mode: File Upload */}
+            {importInputMode === 'file' ? (
+              <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-8 text-center bg-slate-50/60 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <Upload className="w-10 h-10 text-emerald-600 mx-auto mb-2" />
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">
+                  Drag and drop your {importFormat.toUpperCase()} file here, or browse
+                </p>
+                <p className="text-xs text-slate-400 mb-4">
+                  Supports standard {importFormat === 'csv' ? '.csv (comma-separated)' : '.json (JSON array of objects)'} files
+                </p>
+
+                <input
+                  type="file"
+                  id="mcq-bulk-file-upload"
+                  accept={importFormat === 'csv' ? '.csv,.txt' : '.json,.txt'}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="mcq-bulk-file-upload"
+                  className="inline-flex items-center gap-2 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-xs transition"
+                >
+                  <FolderPlus className="w-4 h-4" /> Browse {importFormat.toUpperCase()} File
+                </label>
+
+                {importFile && (
+                  <div className="mt-4 p-3 bg-white dark:bg-slate-800 rounded-xl border border-emerald-500/30 inline-flex items-center gap-3">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      {importFile.name} ({Math.round(importFile.size / 1024)} KB)
+                    </span>
+                    <span className="text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-600 dark:text-slate-300">
+                      {importFormat}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Input Mode: Raw Text Paste */
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="raw-import-textarea" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Paste raw {importFormat.toUpperCase()} text directly below:
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    {rawImportText.length > 0 ? `${rawImportText.length} characters` : 'Empty'}
+                  </span>
+                </div>
+
+                <textarea
+                  id="raw-import-textarea"
+                  rows={8}
+                  value={rawImportText}
+                  onChange={e => handleRawTextChange(e.target.value)}
+                  placeholder={
+                    importFormat === 'csv'
+                      ? `Question,OptionA,OptionB,OptionC,OptionD,CorrectAnswer,Explanation,Category,Difficulty\n"Who founded Mughal Empire?","Babur","Humayun","Akbar","Jahangir","A","Babur founded the Mughal Empire in 1526 after First Battle of Panipat.","History","Easy"`
+                      : `[\n  {\n    "question": "Who founded Mughal Empire?",\n    "options": [\n      {"id": "A", "text": "Babur"},\n      {"id": "B", "text": "Humayun"},\n      {"id": "C", "text": "Akbar"},\n      {"id": "D", "text": "Jahangir"}\n    ],\n    "correctAnswer": "A",\n    "explanation": "Babur founded the empire in 1526.",\n    "category": "History",\n    "difficulty": "Easy"\n  }\n]`
+                  }
+                  className="w-full p-3 font-mono text-xs rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 focus:bg-white dark:focus:bg-slate-800"
+                />
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => parseRawContent(rawImportText, importFormat, bulkTargetCategory)}
+                    disabled={!rawImportText.trim()}
+                    className="bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold px-4 py-2 rounded-xl transition disabled:opacity-50"
+                  >
+                    Re-Parse & Validate Text
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Parsing Errors / Warnings */}
+            {parseErrors.length > 0 && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/50 rounded-xl space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="w-4 h-4" /> Parsing Warnings ({parseErrors.length})
+                </div>
+                <ul className="text-xs text-amber-700 dark:text-amber-400 list-disc list-inside space-y-0.5">
+                  {parseErrors.slice(0, 4).map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                  {parseErrors.length > 4 && <li>...and {parseErrors.length - 4} more warnings</li>}
+                </ul>
+              </div>
+            )}
+
+            {/* Success Feedback Notification */}
+            {importStatus && (
+              <div
+                className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  importStatus.type === 'success'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+                    : 'bg-rose-50 dark:bg-rose-950/40 border-rose-500/30 text-rose-800 dark:text-rose-300'
+                }`}
+              >
+                <div className="flex items-center gap-2 text-xs font-bold">
+                  {importStatus.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{importStatus.message}</span>
+                </div>
+
+                {importStatus.type === 'success' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (bulkTargetCategory !== '__file__') {
+                        setAdminCatFilter(bulkTargetCategory);
+                      }
+                      setActiveTab('mcqs');
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg transition shrink-0"
+                  >
+                    View in MCQ Bank →
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Step 3: Live Verification & Preview Table */}
+          {parsedItems.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">
+                    3
+                  </span>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Live Preview & Verification
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      Review parsed questions before saving to the database.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                    {parsedItems.length} Valid MCQs Ready
+                  </span>
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl">
+                    Target: {bulkTargetCategory === '__file__' ? 'File Categories' : bulkTargetCategory}
+                  </span>
+                </div>
+              </div>
+
+              {/* Filter Search inside Preview */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={previewSearch}
+                  onChange={e => setPreviewSearch(e.target.value)}
+                  placeholder="Filter preview questions..."
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
+                />
+              </div>
+
+              {/* Preview Table */}
+              <div className="overflow-x-auto max-h-96 rounded-xl border border-slate-200 dark:border-slate-800">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-50 dark:bg-slate-800/80 sticky top-0 z-10">
+                    <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-400 font-bold uppercase">
+                      <th className="p-3 w-12 text-center">#</th>
+                      <th className="p-3 min-w-[240px]">Question</th>
+                      <th className="p-3 min-w-[200px]">Options</th>
+                      <th className="p-3 w-16 text-center">Ans</th>
+                      <th className="p-3 min-w-[130px]">Category</th>
+                      <th className="p-3 w-20">Diff</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {parsedItems
+                      .filter(it =>
+                        previewSearch
+                          ? it.question.toLowerCase().includes(previewSearch.toLowerCase()) ||
+                            it.category.toLowerCase().includes(previewSearch.toLowerCase())
+                          : true
+                      )
+                      .slice(0, 50)
+                      .map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                          <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                          <td className="p-3 font-medium text-slate-800 dark:text-slate-200">
+                            <p className="line-clamp-2">{item.question}</p>
+                          </td>
+                          <td className="p-3 text-[11px] text-slate-600 dark:text-slate-400">
+                            <div className="space-y-0.5">
+                              {item.options?.map((o: any) => (
+                                <div
+                                  key={o.id}
+                                  className={
+                                    o.id === item.correctAnswer
+                                      ? 'font-bold text-emerald-600 dark:text-emerald-400'
+                                      : ''
+                                  }
+                                >
+                                  <span className="font-semibold mr-1">{o.id})</span> {o.text}
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-3 text-center font-bold text-emerald-600">
+                            <span className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 inline-flex items-center justify-center">
+                              {item.correctAnswer}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[11px]">
+                              {item.category}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-500 text-[11px]">{item.difficulty}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {parsedItems.length > 50 && (
+                <p className="text-[11px] text-slate-400 text-center italic">
+                  Showing first 50 of {parsedItems.length} parsed questions. All {parsedItems.length} will be imported.
+                </p>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setParsedItems([]);
+                    setImportFile(null);
+                    setRawImportText('');
+                    setParseErrors([]);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 transition"
+                >
+                  Clear / Reset
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleProcessBulkImport}
+                  disabled={parsedItems.length === 0 || importLoading}
+                  className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-8 py-3 rounded-xl transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {importLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Importing Questions...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>
+                        Import {parsedItems.length} Questions into{' '}
+                        {bulkTargetCategory === '__file__' ? 'Categories' : bulkTargetCategory}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Categories */}
+      {activeTab === 'categories' && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Plus className="w-5 h-5 text-emerald-600" /> Create New Subject Category
+            </h3>
+
+            <form onSubmit={handleAddCategory} className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                value={newCatName}
+                onChange={e => setNewCatName(e.target.value)}
+                placeholder="Category Name (e.g. Teaching Tests)"
+                className="flex-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+                required
+              />
+              <input
+                type="text"
+                value={newCatDesc}
+                onChange={e => setNewCatDesc(e.target.value)}
+                placeholder="Short Description"
+                className="flex-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white"
+              />
+              <button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
+              >
+                <Plus className="w-4 h-4" /> Add Category
+              </button>
+            </form>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  All Subject Categories ({categories.length})
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Click "+ Add MCQ" on any category card to open builder pre-filled for that subject.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {categories.map(c => (
+                <div
+                  key={c.id}
+                  className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-4 hover:border-emerald-500/40 transition"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-slate-900 dark:text-white text-sm">
+                        {c.name}
+                      </span>
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                        {c.questionCount} MCQs
+                      </span>
+                    </div>
+                    {c.description ? (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                        {c.description}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">No description provided.</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => openAddMcqModal(c.name)}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1 shadow-sm"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> MCQ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleTargetCategoryChange(c.name);
+                        setActiveTab('import');
+                      }}
+                      className="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400 text-xs font-semibold py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1 border border-emerald-500/20"
+                      title={`Bulk upload questions directly into ${c.name}`}
+                    >
+                      <Upload className="w-3.5 h-3.5" /> Bulk
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminCatFilter(c.name);
+                        setActiveTab('mcqs');
+                      }}
+                      className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1"
+                    >
+                      View ({c.questionCount})
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: AdSense Ads Settings */}
+      {activeTab === 'ads' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-6">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            Monetization & AdSense Banner Controls
+          </h3>
+
+          <div className="space-y-4">
+            <label className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div>
+                <span className="text-xs font-bold block">Top Header Banner Ad</span>
+                <span className="text-[11px] text-slate-400">Displays sponsored banner above hero section</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={siteForm.adConfig.headerBannerEnabled}
+                onChange={e =>
+                  setSiteForm({
+                    ...siteForm,
+                    adConfig: { ...siteForm.adConfig, headerBannerEnabled: e.target.checked }
+                  })
+                }
+                className="w-4 h-4 text-emerald-600 rounded"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div>
+                <span className="text-xs font-bold block">Sidebar Ad Block</span>
+                <span className="text-[11px] text-slate-400">Displays sponsored box in right sidebar</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={siteForm.adConfig.sidebarAdEnabled}
+                onChange={e =>
+                  setSiteForm({
+                    ...siteForm,
+                    adConfig: { ...siteForm.adConfig, sidebarAdEnabled: e.target.checked }
+                  })
+                }
+                className="w-4 h-4 text-emerald-600 rounded"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div>
+                <span className="text-xs font-bold block">In-Content MCQ Ad</span>
+                <span className="text-[11px] text-slate-400">Displays inline text ad between MCQs</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={siteForm.adConfig.inContentAdEnabled}
+                onChange={e =>
+                  setSiteForm({
+                    ...siteForm,
+                    adConfig: { ...siteForm.adConfig, inContentAdEnabled: e.target.checked }
+                  })
+                }
+                className="w-4 h-4 text-emerald-600 rounded"
+              />
+            </label>
+          </div>
+
+          <button
+            onClick={handleSaveSettings}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow"
+          >
+            Save Ad Settings
+          </button>
+        </div>
+      )}
+
+      {/* Tab: Site Settings */}
+      {activeTab === 'settings' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-6">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            General Website Branding & Settings
+          </h3>
+
+          <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
+            <div>
+              <label className="font-bold block mb-1">Website Name (Dynamic Title)</label>
+              <input
+                type="text"
+                value={siteForm.siteName}
+                onChange={e => setSiteForm({ ...siteForm, siteName: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="font-bold block mb-1">Tagline</label>
+              <input
+                type="text"
+                value={siteForm.tagline}
+                onChange={e => setSiteForm({ ...siteForm, tagline: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+              />
+            </div>
+
+            <div>
+              <label className="font-bold block mb-1">Top Announcement Bar Text</label>
+              <input
+                type="text"
+                value={siteForm.announcementText}
+                onChange={e => setSiteForm({ ...siteForm, announcementText: e.target.value })}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+              />
+            </div>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={siteForm.isAnnouncementActive}
+                onChange={e => setSiteForm({ ...siteForm, isAnnouncementActive: e.target.checked })}
+              />
+              <span>Enable Top Announcement Bar</span>
+            </label>
+
+            <button
+              type="submit"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl flex items-center gap-1.5 shadow"
+            >
+              <Save className="w-4 h-4" /> Save Website Branding
+            </button>
+
+            {saveSuccess && (
+              <p className="text-emerald-600 font-bold text-xs mt-2">
+                ✅ Settings updated successfully!
+              </p>
+            )}
+          </form>
+        </div>
+      )}
+
+      {/* Tab: Backup Database */}
+      {activeTab === 'backup' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 text-center">
+          <Database className="w-10 h-10 text-emerald-500 mx-auto" />
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            Database Snapshot & Recovery
+          </h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Download a full JSON snapshot of all MCQs, categories, user profiles, and site settings.
+          </p>
+
+          <button
+            onClick={handleDownloadBackup}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-6 py-3 rounded-xl transition inline-flex items-center gap-2 shadow"
+          >
+            <Download className="w-4 h-4" /> Download Full JSON Database Snapshot
+          </button>
+        </div>
+      )}
+
+      {/* Tab: Admin Password & Security Settings */}
+      {activeTab === 'security' && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Admin Account & Password Security
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Apna admin username, email aur password yahan se tabdeel karein. Naye credentials foran save ho jayenge.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-900/40 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                  Logged in as: {adminUser}
+                </span>
+              </div>
+            </div>
+
+            {/* Status Alert */}
+            {credStatus && (
+              <div
+                className={`p-4 rounded-xl border flex items-start gap-3 ${
+                  credStatus.type === 'success'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+                    : 'bg-rose-50 dark:bg-rose-950/40 border-rose-500/30 text-rose-800 dark:text-rose-300'
+                }`}
+              >
+                {credStatus.type === 'success' ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <div className="text-xs font-medium">
+                  <span className="font-bold block mb-0.5">
+                    {credStatus.type === 'success' ? 'Kamyabi (Success)!' : 'Tawajjah (Error)!'}
+                  </span>
+                  <span>{credStatus.message}</span>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleChangeCredentials} className="space-y-6">
+              {/* Profile Details Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-slate-400" /> Admin Username
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={credUsername}
+                    onChange={e => setCredUsername(e.target.value)}
+                    placeholder="e.g. admin"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <span className="text-[11px] text-slate-400">Login ke waqt yeh username istemal kiya ja sakta hai.</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-slate-400" /> Admin Email
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={credEmail}
+                    onChange={e => setCredEmail(e.target.value)}
+                    placeholder="admin@futureacademypro.com"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <span className="text-[11px] text-slate-400">Aap is email se bhi login kar sakte hain.</span>
+                </div>
+              </div>
+
+              {/* Password Change Section */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-emerald-600" />
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Password Tabdeel Karein (Update Password)
+                  </h4>
+                </div>
+
+                {/* Current Password Field */}
+                <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 space-y-2">
+                  <label className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center justify-between">
+                    <span>Mojooda (Current) Password *</span>
+                    <span className="text-[11px] font-normal text-amber-700 dark:text-amber-400">
+                      (Default login ke waqt &quot;admin&quot; hai)
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showCredCurrentPass ? 'text' : 'password'}
+                      required
+                      value={credCurrentPass}
+                      onChange={e => setCredCurrentPass(e.target.value)}
+                      placeholder="Apna mojooda password enter karein"
+                      className="w-full p-2.5 pr-10 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700/60 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCredCurrentPass(!showCredCurrentPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                    >
+                      {showCredCurrentPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Naya Password (New Password)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCredNewPass ? 'text' : 'password'}
+                        value={credNewPass}
+                        onChange={e => setCredNewPass(e.target.value)}
+                        placeholder="Naya password likhein (agar tabdeel karna ho)"
+                        className="w-full p-2.5 pr-10 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCredNewPass(!showCredNewPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                      >
+                        {showCredNewPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Confirm Naya Password
+                    </label>
+                    <input
+                      type={showCredNewPass ? 'text' : 'password'}
+                      value={credConfirmPass}
+                      onChange={e => setCredConfirmPass(e.target.value)}
+                      placeholder="Naya password dobara likhein"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <p className="text-[11px] text-slate-400">
+                  🔒 Security Note: Password badalne ke baad agli martaba login ke liye yeh naya password istemal hoga.
+                </p>
+
+                <button
+                  type="submit"
+                  disabled={credLoading}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-6 py-3 rounded-xl transition flex items-center gap-2 shadow-md disabled:opacity-50 cursor-pointer"
+                >
+                  {credLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving Changes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save New Credentials</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Single MCQ Form Modal */}
+      {showMcqModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">
+              {editingMcq ? 'Edit MCQ' : 'Add New MCQ'}
+            </h3>
+
+            <form onSubmit={handleSaveMcq} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold block mb-1">Question Text</label>
+                <textarea
+                  rows={2}
+                  value={questionText}
+                  onChange={e => setQuestionText(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  placeholder="Option A"
+                  value={optA}
+                  onChange={e => setOptA(e.target.value)}
+                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Option B"
+                  value={optB}
+                  onChange={e => setOptB(e.target.value)}
+                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Option C"
+                  value={optC}
+                  onChange={e => setOptC(e.target.value)}
+                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Option D"
+                  value={optD}
+                  onChange={e => setOptD(e.target.value)}
+                  className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold block mb-1">Correct Answer</label>
+                  <select
+                    value={correctAnswer}
+                    onChange={e => setCorrectAnswer(e.target.value as any)}
+                    className="w-full p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  >
+                    <option value="A">Option A</option>
+                    <option value="B">Option B</option>
+                    <option value="C">Option C</option>
+                    <option value="D">Option D</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold block mb-1">Category</label>
+                  <select
+                    value={selectedCat}
+                    onChange={e => setSelectedCat(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  >
+                    {categories.map(c => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">Detailed Explanation</label>
+                <textarea
+                  rows={2}
+                  value={explanation}
+                  onChange={e => setExplanation(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowMcqModal(false)}
+                  className="px-4 py-2 text-slate-500 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                >
+                  Save MCQ
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

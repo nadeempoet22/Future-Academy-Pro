@@ -1,0 +1,8 @@
+{
+  "name": "Future Academy Pro - Ultimate MCQ & Test Prep Platform",
+  "description": "Comprehensive, modern, fast MCQs platform with practice quizzes, exam mode, AI explanations, bulk MCQ import/export, user leaderboard, and admin management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
