@@ -4,15 +4,19 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  HelpCircle,
-  Award,
   Download,
   RotateCcw,
   X,
   ChevronRight,
   ChevronLeft,
   Sparkles,
-  Trophy
+  Trophy,
+  User,
+  Mail,
+  Play,
+  AlertCircle,
+  CheckCircle2,
+  FileCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import jsPDF from 'jspdf';
@@ -36,6 +40,24 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   mode = 'Practice',
   onQuizComplete
 }) => {
+  const [candidateName, setCandidateName] = useState<string>(() => {
+    try {
+      return localStorage.getItem('futureacademy_candidate_name') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [candidateEmail, setCandidateEmail] = useState<string>(() => {
+    try {
+      return localStorage.getItem('futureacademy_candidate_email') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [quizStarted, setQuizStarted] = useState(false);
+  const [candidateError, setCandidateError] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, 'A' | 'B' | 'C' | 'D'>>({});
   const [isCompleted, setIsCompleted] = useState(false);
@@ -43,20 +65,70 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [quizMode, setQuizMode] = useState<'Practice' | 'Exam'>(mode);
   const [enableNegativeMarking, setEnableNegativeMarking] = useState(false);
 
+  // When modal is reopened, reload stored candidate info and show candidate entry screen
   useEffect(() => {
-    if (!isOpen || isCompleted) return;
+    if (isOpen) {
+      try {
+        const savedName = localStorage.getItem('futureacademy_candidate_name');
+        const savedEmail = localStorage.getItem('futureacademy_candidate_email');
+        if (savedName) setCandidateName(savedName);
+        if (savedEmail) setCandidateEmail(savedEmail);
+      } catch {}
+
+      setQuizStarted(false);
+      setIsCompleted(false);
+      setCurrentIndex(0);
+      setUserAnswers({});
+      setTimeSeconds(0);
+      setCandidateError('');
+      setQuizMode(mode);
+    }
+  }, [isOpen, mode]);
+
+  // Quiz timer starts ONLY after candidate fills Name & Email and clicks "Start Quiz Now"
+  useEffect(() => {
+    if (!isOpen || !quizStarted || isCompleted) return;
 
     const timer = setInterval(() => {
       setTimeSeconds(prev => prev + 1);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isOpen, isCompleted]);
+  }, [isOpen, quizStarted, isCompleted]);
 
   if (!isOpen || questions.length === 0) return null;
 
   const currentMcq = questions[currentIndex];
   const isLastQuestion = currentIndex === questions.length - 1;
+
+  const handleStartQuiz = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = candidateName.trim();
+    const trimmedEmail = candidateEmail.trim();
+
+    if (!trimmedName || trimmedName.length < 2) {
+      setCandidateError('Baraye meharbani apna mukammal naam darj karein (kam az kam 2 huroof).');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setCandidateError('Baraye meharbani durust email address darj karein (maslan: name@gmail.com).');
+      return;
+    }
+
+    try {
+      localStorage.setItem('futureacademy_candidate_name', trimmedName);
+      localStorage.setItem('futureacademy_candidate_email', trimmedEmail);
+    } catch {}
+
+    setCandidateError('');
+    setTimeSeconds(0);
+    setCurrentIndex(0);
+    setUserAnswers({});
+    setIsCompleted(false);
+    setQuizStarted(true);
+  };
 
   const handleSelectOption = (optionId: 'A' | 'B' | 'C' | 'D') => {
     if (isCompleted) return;
@@ -124,7 +196,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       scorePercentage: scoreData.percentage,
       timeTakenSeconds: timeSeconds,
       completedAt: new Date().toISOString(),
-      mode: quizMode
+      mode: quizMode,
+      candidateName: candidateName.trim(),
+      candidateEmail: candidateEmail.trim()
     };
 
     if (onQuizComplete) {
@@ -152,59 +226,94 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     const scoreData = calculateScore();
     const doc = new jsPDF('landscape');
 
+    // Certificate border
     doc.setLineWidth(2);
     doc.rect(10, 10, 277, 190);
+    doc.setLineWidth(0.5);
+    doc.rect(13, 13, 271, 184);
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(26);
     doc.text('CERTIFICATE OF ACCOMPLISHMENT', 148, 45, { align: 'center' });
 
-    doc.setFontSize(14);
+    doc.setFontSize(13);
     doc.setFont('helvetica', 'normal');
     doc.text('This is proudly awarded to', 148, 65, { align: 'center' });
 
-    doc.setFontSize(22);
+    // Candidate Name
+    doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text('Ahmad Raza (Scholar Candidate)', 148, 85, { align: 'center' });
+    doc.text(candidateName.trim() || 'Candidate', 148, 83, { align: 'center' });
+
+    // Candidate Email
+    if (candidateEmail.trim()) {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Candidate Email: ${candidateEmail.trim()}`, 148, 92, { align: 'center' });
+    }
 
     doc.setFontSize(13);
     doc.setFont('helvetica', 'normal');
     doc.text(
       `For successfully completing the ${title} (${categoryName}) Test with an overall score of ${scoreData.percentage}%.`,
       148,
-      105,
+      110,
       { align: 'center' }
     );
 
     doc.setFontSize(11);
-    doc.text(`Total Questions: ${questions.length} | Correct: ${scoreData.correct} | Time Taken: ${formatTime(timeSeconds)}`, 148, 125, { align: 'center' });
+    doc.text(
+      `Total Questions: ${questions.length} | Correct: ${scoreData.correct} | Time Taken: ${formatTime(timeSeconds)} | Mode: ${quizMode}`,
+      148,
+      130,
+      { align: 'center' }
+    );
 
-    doc.text(`Issued by Future Academy Pro Examination Board - Date: ${new Date().toLocaleDateString()}`, 148, 155, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(
+      `Issued by Future Academy Pro Examination Board - Date: ${new Date().toLocaleDateString()}`,
+      148,
+      160,
+      { align: 'center' }
+    );
 
-    doc.save(`FutureAcademyPro-Certificate-${title.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+    const safeFilename = (candidateName.trim() || 'Candidate').replace(/[^a-z0-9]/gi, '_');
+    doc.save(`FutureAcademyPro_${safeFilename}_Certificate.pdf`);
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
       <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-auto">
+        
         {/* Top Header */}
         <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-center justify-between border-b border-slate-800">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded">
-              {quizMode} Mode ({categoryName})
-            </span>
-            <h2 className="text-base sm:text-lg font-bold text-white mt-0.5">{title}</h2>
+          <div className="flex items-center gap-3">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full inline-block">
+                {quizStarted ? `${quizMode} Mode (${categoryName})` : 'Candidate Exam Verification'}
+              </span>
+              <h2 className="text-base sm:text-lg font-bold text-white mt-1 line-clamp-1">{title}</h2>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl text-xs font-mono text-emerald-400 border border-slate-700">
-              <Clock className="w-3.5 h-3.5" />
-              {formatTime(timeSeconds)}
-            </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {quizStarted && (
+              <>
+                <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/90 text-slate-300 px-3 py-1.5 rounded-xl text-xs border border-slate-700 max-w-[170px] truncate">
+                  <User className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="truncate">{candidateName}</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl text-xs font-mono text-emerald-400 border border-slate-700">
+                  <Clock className="w-3.5 h-3.5" />
+                  {formatTime(timeSeconds)}
+                </div>
+              </>
+            )}
 
             <button
               onClick={onClose}
               className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition"
+              title="Close Quiz"
             >
               <X className="w-5 h-5" />
             </button>
@@ -212,7 +321,153 @@ export const QuizModal: React.FC<QuizModalProps> = ({
         </div>
 
         {/* Modal Main Body */}
-        {!isCompleted ? (
+        {!quizStarted ? (
+          /* 1. CANDIDATE REGISTRATION / QUIZ START SCREEN */
+          <div className="p-6 sm:p-8 max-w-xl mx-auto">
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3 shadow-inner">
+                <FileCheck className="w-7 h-7" />
+              </div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+                FPSC & PPSC Candidate Verification
+              </span>
+              <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white mt-2">
+                Quiz Entry Details
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Quiz shuru karne ke liye apna <b>Naam</b> aur <b>Email</b> darj karein. Yeh details aapke scorecard aur completion certificate par darj hongi.
+              </p>
+            </div>
+
+            <form onSubmit={handleStartQuiz} className="space-y-4">
+              {/* Candidate Name */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>Candidate Full Name (پورا نام) *</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Required</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    value={candidateName}
+                    onChange={e => {
+                      setCandidateName(e.target.value);
+                      if (candidateError) setCandidateError('');
+                    }}
+                    placeholder="e.g. Muhammad Ali / Sarah Khan"
+                    required
+                    autoFocus
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Candidate Email */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>Email Address (ای میل ایڈریس) *</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Required</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="email"
+                    value={candidateEmail}
+                    onChange={e => {
+                      setCandidateEmail(e.target.value);
+                      if (candidateError) setCandidateError('');
+                    }}
+                    placeholder="e.g. candidate@example.com"
+                    required
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Quiz Configuration (Mode & Negative marking) */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+                <div>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">
+                    Test Mode:
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuizMode('Practice')}
+                      className={`p-2.5 rounded-xl text-xs font-semibold border transition text-left flex flex-col gap-0.5 ${
+                        quizMode === 'Practice'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="font-bold flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Practice Mode
+                      </span>
+                      <span className={`text-[10px] ${quizMode === 'Practice' ? 'text-emerald-100' : 'text-slate-400'}`}>
+                        Instant answer & explanation
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setQuizMode('Exam')}
+                      className={`p-2.5 rounded-xl text-xs font-semibold border transition text-left flex flex-col gap-0.5 ${
+                        quizMode === 'Exam'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="font-bold flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" /> Timed Exam Mode
+                      </span>
+                      <span className={`text-[10px] ${quizMode === 'Exam' ? 'text-emerald-100' : 'text-slate-400'}`}>
+                        Real test simulation
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={enableNegativeMarking}
+                      onChange={e => setEnableNegativeMarking(e.target.checked)}
+                      className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                    />
+                    <span>Negative Marking (-0.25)</span>
+                  </label>
+
+                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
+                    {questions.length} Questions
+                  </span>
+                </div>
+              </div>
+
+              {/* Validation Error Banner */}
+              {candidateError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-medium flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{candidateError}</span>
+                </div>
+              )}
+
+              {/* Start Quiz CTA */}
+              <button
+                type="submit"
+                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-sm font-bold rounded-xl shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition"
+              >
+                <Play className="w-4 h-4 fill-white" /> Start Quiz Now →
+              </button>
+            </form>
+          </div>
+        ) : !isCompleted ? (
+          /* 2. ACTIVE QUIZ TEST QUESTIONS */
           <div className="p-5 sm:p-6">
             {/* Mode & Options Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 mb-6 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
@@ -226,7 +481,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                       : 'text-slate-600 dark:text-slate-300'
                   }`}
                 >
-                  Practice (Instant Answer)
+                  Practice
                 </button>
                 <button
                   onClick={() => setQuizMode('Exam')}
@@ -236,19 +491,20 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                       : 'text-slate-600 dark:text-slate-300'
                   }`}
                 >
-                  Timed Exam Mode
+                  Exam
                 </button>
               </div>
 
-              <label className="flex items-center gap-1.5 cursor-pointer text-slate-600 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={enableNegativeMarking}
-                  onChange={e => setEnableNegativeMarking(e.target.checked)}
-                  className="rounded text-emerald-600 focus:ring-emerald-500"
-                />
-                <span>Negative Marking (-0.25)</span>
-              </label>
+              <div className="flex items-center gap-3">
+                {enableNegativeMarking && (
+                  <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                    Negative Marking Active (-0.25)
+                  </span>
+                )}
+                <span className="text-slate-500 font-medium">
+                  Candidate: <strong className="text-slate-800 dark:text-slate-200">{candidateName}</strong>
+                </span>
+              </div>
             </div>
 
             {/* Question Progress Indicator */}
@@ -378,7 +634,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             </div>
           </div>
         ) : (
-          /* Quiz Result Screen */
+          /* 3. QUIZ RESULT & SCORECARD SCREEN */
           <div className="p-6 text-center">
             <div className="inline-flex p-4 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-3">
               <Trophy className="w-10 h-10 animate-bounce" />
@@ -387,8 +643,18 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             <h3 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">
               Quiz Completed!
             </h3>
+
+            {/* Candidate Name and Email display */}
+            <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 max-w-fit mx-auto mb-2">
+              <User className="w-3.5 h-3.5" />
+              <span>{candidateName}</span>
+              <span className="text-slate-400">|</span>
+              <Mail className="w-3.5 h-3.5" />
+              <span>{candidateEmail}</span>
+            </div>
+
             <p className="text-xs text-slate-500 mb-6">
-              Here is your overall performance scorecard in {title}.
+              Here is your verified scorecard in {title}.
             </p>
 
             {(() => {
@@ -437,10 +703,11 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                         setCurrentIndex(0);
                         setUserAnswers({});
                         setTimeSeconds(0);
+                        setQuizStarted(false);
                       }}
                       className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition"
                     >
-                      <RotateCcw className="w-4 h-4" /> Retake Test
+                      <RotateCcw className="w-4 h-4" /> Retake / Change Details
                     </button>
 
                     <button

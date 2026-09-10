@@ -453,7 +453,7 @@ async function startServer() {
   });
 
   app.post('/api/quiz/submit', (req, res) => {
-    const { quizTitle, category, score, totalQuestions, correctAnswers, wrongAnswers, skippedQuestions, timeTakenSeconds, mode } = req.body;
+    const { quizTitle, category, score, totalQuestions, correctAnswers, wrongAnswers, skippedQuestions, timeTakenSeconds, mode, candidateName, candidateEmail } = req.body;
 
     const result: QuizResult = {
       id: `qres-${Date.now()}`,
@@ -466,7 +466,9 @@ async function startServer() {
       scorePercentage: Math.round((correctAnswers / totalQuestions) * 100),
       timeTakenSeconds,
       completedAt: new Date().toISOString(),
-      mode: mode || 'Practice'
+      mode: mode || 'Practice',
+      candidateName: candidateName || 'Candidate',
+      candidateEmail: candidateEmail || ''
     };
 
     userProfile.quizHistory.unshift(result);

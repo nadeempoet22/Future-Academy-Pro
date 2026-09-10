@@ -158,18 +158,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             Exam Guides
           </button>
-
-          <button
-            onClick={() => {
-              setActiveTab('user');
-              setSelectedCategory(null);
-            }}
-            className={`transition hover:text-emerald-600 dark:hover:text-emerald-400 ${
-              activeTab === 'user' ? 'text-emerald-600 dark:text-emerald-400 font-bold' : ''
-            }`}
-          >
-            Scholar Portal
-          </button>
         </div>
 
         {/* Right Actions */}
@@ -253,15 +241,6 @@ export const Header: React.FC<HeaderProps> = ({
             className="w-full text-left font-medium py-2 text-sm text-slate-800 dark:text-slate-200"
           >
             Exam Preparation Blog
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('user');
-              setMobileMenuOpen(false);
-            }}
-            className="w-full text-left font-medium py-2 text-sm text-slate-800 dark:text-slate-200"
-          >
-            User Scholar Portal
           </button>
           {activeTab === 'admin' && (
             <button

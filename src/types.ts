@@ -71,6 +71,8 @@ export interface QuizResult {
   timeTakenSeconds: number;
   completedAt: string;
   mode: 'Practice' | 'Exam';
+  candidateName?: string;
+  candidateEmail?: string;
 }
 
 export interface UserProfile {

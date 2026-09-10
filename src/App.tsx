@@ -14,7 +14,6 @@ import { MCQCard } from './components/MCQCard';
 import { CategoryGrid } from './components/CategoryGrid';
 import { QuizModal } from './components/QuizModal';
 import { AISearchModal } from './components/AISearchModal';
-import { UserPortal } from './components/UserPortal';
 import { AdminPanel } from './components/AdminPanel';
 import { BlogSection } from './components/BlogSection';
 import { LegalModals } from './components/LegalModals';
@@ -757,16 +756,6 @@ export default function App() {
 
         {/* Tab: Exam Guides Blog */}
         {activeTab === 'blog' && <BlogSection posts={blogPosts} />}
-
-        {/* Tab: Scholar User Portal */}
-        {activeTab === 'user' && userProfile && (
-          <UserPortal
-            user={userProfile}
-            allMcqs={mcqs}
-            onStartBookmarkQuiz={handleLaunchBookmarkQuiz}
-            onBookmarkToggle={handleBookmarkToggle}
-          />
-        )}
 
         {/* Tab: Admin Dashboard */}
         {activeTab === 'admin' && (
