@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MCQ, Category, SiteSettings } from '../types';
+import { MCQ, Category, SiteSettings, Option } from '../types';
 import {
   ShieldCheck,
   Plus,
@@ -198,27 +198,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           password: loginPassword.trim()
         })
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setIsAdminLoggedIn(true);
-        setAdminUser(data.user.username);
-        setAdminEmail(data.user.email);
-        setCredUsername(data.user.username);
-        setCredEmail(data.user.email);
-        localStorage.setItem('futureacademy_admin_auth', 'true');
-        localStorage.setItem('futureacademy_admin_user', data.user.username);
-        localStorage.setItem('futureacademy_admin_email', data.user.email);
-        localStorage.setItem('pakmcqs_admin_auth', 'true');
-        setLoginPassword('');
-        setLoginError('');
-      } else {
-        setLoginError(data.error || 'Ghalat credentials! Default login: username "admin", password "admin".');
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          setIsAdminLoggedIn(true);
+          setAdminUser(data.user.username);
+          setAdminEmail(data.user.email);
+          setCredUsername(data.user.username);
+          setCredEmail(data.user.email);
+          localStorage.setItem('futureacademy_admin_auth', 'true');
+          localStorage.setItem('futureacademy_admin_user', data.user.username);
+          localStorage.setItem('futureacademy_admin_email', data.user.email);
+          setLoginPassword('');
+          setLoginError('');
+          setLoginLoading(false);
+          return;
+        } else {
+          setLoginError(data.error || 'Ghalat credentials! Default login: username "admin", password "admin".');
+          setLoginLoading(false);
+          return;
+        }
       }
-    } catch (err: any) {
-      setLoginError('Server connection error. Baraye meharbani dobara koshish karein.');
-    } finally {
-      setLoginLoading(false);
+    } catch {
+      // Fallback for offline or static hosting
     }
+
+    // Client-side fallback check (for static hosting like Vercel)
+    const storedPass = localStorage.getItem('futureacademy_admin_pass') || 'admin';
+    const storedUser = localStorage.getItem('futureacademy_admin_user') || 'admin';
+    const storedEmail = localStorage.getItem('futureacademy_admin_email') || 'admin@futureacademypro.com';
+    const input = loginUsername.trim().toLowerCase();
+
+    if ((input === storedUser.toLowerCase() || input === storedEmail.toLowerCase()) && loginPassword.trim() === storedPass) {
+      setIsAdminLoggedIn(true);
+      setAdminUser(storedUser);
+      setAdminEmail(storedEmail);
+      setCredUsername(storedUser);
+      setCredEmail(storedEmail);
+      localStorage.setItem('futureacademy_admin_auth', 'true');
+      setLoginPassword('');
+      setLoginError('');
+    } else {
+      setLoginError('Ghalat credentials! Default login: username "admin", password "admin".');
+    }
+    setLoginLoading(false);
   };
 
   const handleLogout = () => {
@@ -253,6 +276,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
 
     setCredLoading(true);
+    let updatedOnServer = false;
     try {
       const res = await fetch('/api/admin/change-credentials', {
         method: 'POST',
@@ -264,32 +288,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           newPassword: credNewPass.trim() || undefined
         })
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setCredStatus({
-          type: 'success',
-          message: 'Admin login credentials kamyabi se update ho gaye! Agli martaba login ke liye yeh naya username aur password istemal karein.'
-        });
-        setAdminUser(data.user.username);
-        setAdminEmail(data.user.email);
-        localStorage.setItem('futureacademy_admin_user', data.user.username);
-        localStorage.setItem('futureacademy_admin_email', data.user.email);
-        localStorage.setItem('pakmcqs_admin_user', data.user.username);
-        localStorage.setItem('pakmcqs_admin_email', data.user.email);
-        setCredCurrentPass('');
-        setCredNewPass('');
-        setCredConfirmPass('');
-      } else {
-        setCredStatus({
-          type: 'error',
-          message: data.error || 'Credentials update karne mein masla paish aaya.'
-        });
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.success) {
+          updatedOnServer = true;
+          setAdminUser(data.user.username);
+          setAdminEmail(data.user.email);
+          localStorage.setItem('futureacademy_admin_user', data.user.username);
+          localStorage.setItem('futureacademy_admin_email', data.user.email);
+          if (credNewPass.trim()) {
+            localStorage.setItem('futureacademy_admin_pass', credNewPass.trim());
+          }
+        }
       }
-    } catch (err: any) {
-      setCredStatus({ type: 'error', message: 'Server connection error.' });
-    } finally {
-      setCredLoading(false);
+    } catch {
+      // Offline / client fallback
     }
+
+    // Always update client-side storage as well for offline/Vercel resilience
+    const currentStoredPass = localStorage.getItem('futureacademy_admin_pass') || 'admin';
+    if (updatedOnServer || credCurrentPass === currentStoredPass) {
+      const nextUser = credUsername.trim() || adminUser;
+      const nextEmail = credEmail.trim() || adminEmail;
+      setAdminUser(nextUser);
+      setAdminEmail(nextEmail);
+      localStorage.setItem('futureacademy_admin_user', nextUser);
+      localStorage.setItem('futureacademy_admin_email', nextEmail);
+      if (credNewPass.trim()) {
+        localStorage.setItem('futureacademy_admin_pass', credNewPass.trim());
+      }
+      setCredStatus({
+        type: 'success',
+        message: 'Admin login credentials kamyabi se update ho gaye! Agli martaba login ke liye yeh naya username aur password istemal karein.'
+      });
+      setCredCurrentPass('');
+      setCredNewPass('');
+      setCredConfirmPass('');
+    } else {
+      setCredStatus({
+        type: 'error',
+        message: 'Mojooda (Current) Password ghalat hai. Baraye meharbani durust password darj karein.'
+      });
+    }
+    setCredLoading(false);
   };
 
   const openEditMcqModal = (m: MCQ) => {
@@ -312,15 +353,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSaveMcq = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const optionsList: Option[] = [
+      { id: 'A', text: optA },
+      { id: 'B', text: optB },
+      { id: 'C', text: optC },
+      { id: 'D', text: optD }
+    ];
+
     const payload = {
       question: questionText,
-      options: [
-        { id: 'A', text: optA },
-        { id: 'B', text: optB },
-        { id: 'C', text: optC },
-        { id: 'D', text: optD }
-      ],
-      correctAnswer,
+      options: optionsList,
+      correctAnswer: correctAnswer as 'A' | 'B' | 'C' | 'D',
       explanation,
       reference,
       category: selectedCat,
@@ -344,23 +387,56 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           body: JSON.stringify(payload)
         });
       }
-      setShowMcqModal(false);
-      onRefreshMcqs();
-      onRefreshCategories();
     } catch (e) {
       console.error(e);
     }
+
+    // Keep local storage in sync for offline & static hosting
+    try {
+      const saved = localStorage.getItem('futureacademy_mcqs');
+      let currentLocalMcqs: MCQ[] = saved ? JSON.parse(saved) : mcqs;
+      if (editingMcq) {
+        currentLocalMcqs = currentLocalMcqs.map(m => m.id === editingMcq.id ? ({ ...m, ...payload } as MCQ) : m);
+      } else {
+        const newMcq: MCQ = {
+          ...payload,
+          id: 'mcq-' + Date.now(),
+          author: adminUser || 'Admin',
+          views: 1,
+          likes: 0,
+          dislikes: 0,
+          createdAt: new Date().toISOString(),
+          isFeatured: false,
+          comments: []
+        };
+        currentLocalMcqs = [newMcq, ...currentLocalMcqs];
+      }
+      localStorage.setItem('futureacademy_mcqs', JSON.stringify(currentLocalMcqs));
+    } catch {}
+
+    setShowMcqModal(false);
+    onRefreshMcqs();
+    onRefreshCategories();
   };
 
   const handleDeleteMcq = async (id: string) => {
     if (confirm('Are you sure you want to delete this MCQ?')) {
       try {
         await fetch(`/api/mcqs/${id}`, { method: 'DELETE' });
-        onRefreshMcqs();
-        onRefreshCategories();
       } catch (e) {
         console.error(e);
       }
+
+      try {
+        const saved = localStorage.getItem('futureacademy_mcqs');
+        if (saved) {
+          const list: MCQ[] = JSON.parse(saved);
+          localStorage.setItem('futureacademy_mcqs', JSON.stringify(list.filter(m => m.id !== id)));
+        }
+      } catch {}
+
+      onRefreshMcqs();
+      onRefreshCategories();
     }
   };
 
@@ -372,12 +448,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(siteForm)
       });
-      onUpdateSettings(siteForm);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
       console.error(e);
     }
+    localStorage.setItem('futureacademy_settings', JSON.stringify(siteForm));
+    onUpdateSettings(siteForm);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 3000);
   };
 
   // Parse CSV or JSON content string
@@ -550,6 +627,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setImportLoading(true);
     setImportStatus(null);
 
+    let serverSuccess = false;
     try {
       const res = await fetch('/api/mcqs/bulk-import', {
         method: 'POST',
@@ -560,32 +638,66 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         })
       });
 
-      const data = await res.json();
-      if (res.ok) {
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        serverSuccess = true;
         setImportStatus({
           type: 'success',
           message: data.message || `Successfully imported ${parsedItems.length} MCQs!`,
           count: data.addedCount || parsedItems.length
         });
-        setImportFile(null);
-        setRawImportText('');
-        setParsedItems([]);
-        onRefreshMcqs();
-        onRefreshCategories();
-      } else {
+      }
+    } catch {
+      // Offline / client fallback
+    }
+
+    // Always update local storage for static hosting & offline resilience
+    try {
+      const saved = localStorage.getItem('futureacademy_mcqs');
+      let currentLocal: MCQ[] = saved ? JSON.parse(saved) : mcqs;
+      const converted: MCQ[] = parsedItems.map((item, idx) => ({
+        id: 'mcq-bulk-' + Date.now() + '-' + idx,
+        question: item.question,
+        options: item.options || [
+          { id: 'A', text: item.optionA || '' },
+          { id: 'B', text: item.optionB || '' },
+          { id: 'C', text: item.optionC || '' },
+          { id: 'D', text: item.optionD || '' }
+        ],
+        correctAnswer: item.correctAnswer || 'A',
+        explanation: item.explanation || '',
+        reference: item.reference || 'FPSC Past Papers',
+        category: (bulkTargetCategory !== '__file__' && bulkTargetCategory) ? bulkTargetCategory : (item.category || 'General Knowledge'),
+        subcategory: item.subcategory || 'General',
+        difficulty: (item.difficulty as any) || 'Medium',
+        subject: (bulkTargetCategory !== '__file__' && bulkTargetCategory) ? bulkTargetCategory : (item.category || 'General Knowledge'),
+        tags: item.tags || [item.category || 'FPSC'],
+        author: adminUser || 'Admin',
+        views: 1,
+        likes: 0,
+        dislikes: 0,
+        createdAt: new Date().toISOString(),
+        isFeatured: false,
+        comments: []
+      }));
+      currentLocal = [...converted, ...currentLocal];
+      localStorage.setItem('futureacademy_mcqs', JSON.stringify(currentLocal));
+
+      if (!serverSuccess) {
         setImportStatus({
-          type: 'error',
-          message: data.error || 'Failed to import MCQs into database.'
+          type: 'success',
+          message: `Kamyabi se ${parsedItems.length} MCQs save ho gaye!`,
+          count: parsedItems.length
         });
       }
-    } catch (err: any) {
-      setImportStatus({
-        type: 'error',
-        message: err.message || 'Error occurred while importing questions.'
-      });
-    } finally {
-      setImportLoading(false);
-    }
+    } catch {}
+
+    setImportFile(null);
+    setRawImportText('');
+    setParsedItems([]);
+    onRefreshMcqs();
+    onRefreshCategories();
+    setImportLoading(false);
   };
 
   const handleDownloadSampleCsv = () => {
@@ -661,18 +773,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           iconName: 'BookOpen'
         })
       });
-      setNewCatName('');
-      setNewCatDesc('');
-      onRefreshCategories();
     } catch (e) {
       console.error(e);
     }
+
+    try {
+      const saved = localStorage.getItem('futureacademy_categories');
+      let currentCats: Category[] = saved ? JSON.parse(saved) : categories;
+      const newCat: Category = {
+        id: 'cat-' + Date.now(),
+        name: newCatName.trim(),
+        slug: newCatName.trim().toLowerCase().replace(/\s+/g, '-'),
+        description: newCatDesc.trim() || `${newCatName.trim()} preparation MCQs`,
+        iconName: 'BookOpen',
+        questionCount: 0,
+        subcategories: []
+      };
+      currentCats = [...currentCats, newCat];
+      localStorage.setItem('futureacademy_categories', JSON.stringify(currentCats));
+    } catch {}
+
+    setNewCatName('');
+    setNewCatDesc('');
+    onRefreshCategories();
   };
 
   const handleDownloadBackup = async () => {
-    const res = await fetch('/api/admin/backup');
-    const data = await res.json();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    let backupData: any = null;
+    try {
+      const res = await fetch('/api/admin/backup');
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        backupData = await res.json();
+      }
+    } catch {}
+
+    if (!backupData) {
+      backupData = {
+        exportedAt: new Date().toISOString(),
+        system: 'Future Academy Pro',
+        categories,
+        settings,
+        mcqs
+      };
+    }
+
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { MCQ, Category, SiteSettings, UserProfile, BlogPost, QuizResult } from './types';
+import {
+  initialSiteSettings,
+  initialCategories,
+  initialMcqs,
+  initialUserProfile,
+  initialBlogPosts
+} from './data/seedData';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { AdBanner } from './components/AdBanner';
@@ -54,20 +61,77 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [adminCategoryForAdd, setAdminCategoryForAdd] = useState<string | null>(null);
 
-  // Data State
-  const [settings, setSettings] = useState<SiteSettings | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [mcqs, setMcqs] = useState<MCQ[]>([]);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
+  // Data State with resilient local defaults (instant load & offline/Vercel support)
+  const [settings, setSettings] = useState<SiteSettings>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('futureacademy_settings');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return initialSiteSettings;
+  });
+
+  const [categories, setCategories] = useState<Category[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('futureacademy_categories');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return initialCategories;
+  });
+
+  const [allLocalMcqs, setAllLocalMcqs] = useState<MCQ[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('futureacademy_mcqs');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return initialMcqs;
+  });
+
+  const [mcqs, setMcqs] = useState<MCQ[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('futureacademy_mcqs');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 10);
+        }
+      } catch {}
+    }
+    return initialMcqs.slice(0, 10);
+  });
+
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('futureacademy_user_profile');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return initialUserProfile;
+  });
+
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('futureacademy_blog_posts');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return initialBlogPosts;
+  });
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState('All');
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalMcqsCount, setTotalMcqsCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(() => Math.max(1, Math.ceil(initialMcqs.length / 10)));
+  const [totalMcqsCount, setTotalMcqsCount] = useState(() => initialMcqs.length);
 
   // Modals
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -142,24 +206,34 @@ export default function App() {
     }
   };
 
-  // Initial Data Fetching
+  // Initial Data Fetching with safe error recovery
   const fetchSettings = async () => {
     try {
       const res = await fetch('/api/settings');
-      const data = await res.json();
-      setSettings(data);
-    } catch (e) {
-      console.error(e);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data && data.siteName) {
+          setSettings(data);
+          localStorage.setItem('futureacademy_settings', JSON.stringify(data));
+        }
+      }
+    } catch {
+      // Use local settings gracefully
     }
   };
 
   const fetchCategories = async () => {
     try {
       const res = await fetch('/api/categories');
-      const data = await res.json();
-      setCategories(data);
-    } catch (e) {
-      console.error(e);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setCategories(data);
+          localStorage.setItem('futureacademy_categories', JSON.stringify(data));
+        }
+      }
+    } catch {
+      // Use local categories gracefully
     }
   };
 
@@ -176,32 +250,97 @@ export default function App() {
       if (searchQuery) params.append('search', searchQuery);
 
       const res = await fetch(`/api/mcqs?${params.toString()}`);
-      const data = await res.json();
-      setMcqs(data.mcqs || []);
-      setTotalPages(data.totalPages || 1);
-      setTotalMcqsCount(data.total || 0);
-    } catch (e) {
-      console.error(e);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data && Array.isArray(data.mcqs)) {
+          setMcqs(data.mcqs);
+          setTotalPages(data.totalPages || 1);
+          setTotalMcqsCount(data.total || data.mcqs.length);
+          return;
+        }
+      }
+    } catch {
+      // Use local MCQs filtering fallback
     }
+
+    // Local Fallback Filter Engine (works 100% offline & on static Vercel)
+    let currentPool = [...allLocalMcqs];
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('futureacademy_mcqs');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            currentPool = parsed;
+          }
+        } catch {}
+      }
+    }
+
+    let filtered = [...currentPool];
+    if (selectedCategory) {
+      filtered = filtered.filter(m => m.category === selectedCategory || m.subject === selectedCategory);
+    }
+    if (difficultyFilter !== 'All') {
+      filtered = filtered.filter(m => m.difficulty.toLowerCase() === difficultyFilter.toLowerCase());
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(m =>
+        m.question.toLowerCase().includes(q) ||
+        m.explanation.toLowerCase().includes(q) ||
+        m.category.toLowerCase().includes(q) ||
+        m.tags.some(t => t.toLowerCase().includes(q))
+      );
+    }
+
+    if (sortBy === 'most_viewed') {
+      filtered.sort((a, b) => (b.views || 0) - (a.views || 0));
+    } else if (sortBy === 'most_liked') {
+      filtered.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    } else {
+      // newest
+      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    const limit = 10;
+    const total = filtered.length;
+    const pages = Math.max(1, Math.ceil(total / limit));
+    const startIdx = (currentPage - 1) * limit;
+    const paged = filtered.slice(startIdx, startIdx + limit);
+
+    setMcqs(paged);
+    setTotalPages(pages);
+    setTotalMcqsCount(total);
   };
 
   const fetchUserProfile = async () => {
     try {
       const res = await fetch('/api/user/profile');
-      const data = await res.json();
-      setUserProfile(data);
-    } catch (e) {
-      console.error(e);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data && data.name) {
+          setUserProfile(data);
+          localStorage.setItem('futureacademy_user_profile', JSON.stringify(data));
+        }
+      }
+    } catch {
+      // Use local user profile
     }
   };
 
   const fetchBlogPosts = async () => {
     try {
       const res = await fetch('/api/blog');
-      const data = await res.json();
-      setBlogPosts(data);
-    } catch (e) {
-      console.error(e);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setBlogPosts(data);
+          localStorage.setItem('futureacademy_blog_posts', JSON.stringify(data));
+        }
+      }
+    } catch {
+      // Use local blog posts
     }
   };
 
@@ -220,14 +359,26 @@ export default function App() {
   const handleLaunchDailyQuiz = async () => {
     try {
       const res = await fetch('/api/quiz/daily');
-      const data = await res.json();
-      setQuizTitle('Daily FPSC/PPSC Quiz');
-      setQuizCategory('General');
-      setQuizMcqList(data.questions || []);
-      setQuizModalOpen(true);
-    } catch (e) {
-      console.error(e);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.questions && data.questions.length > 0) {
+          setQuizTitle('Daily FPSC/PPSC Quiz');
+          setQuizCategory('General');
+          setQuizMcqList(data.questions);
+          setQuizModalOpen(true);
+          return;
+        }
+      }
+    } catch {
+      // Local fallback
     }
+
+    const pool = allLocalMcqs.length > 0 ? allLocalMcqs : initialMcqs;
+    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    setQuizTitle('Daily FPSC/PPSC Quiz');
+    setQuizCategory('General');
+    setQuizMcqList(shuffled.slice(0, 10));
+    setQuizModalOpen(true);
   };
 
   // Launch Category Quiz
@@ -238,14 +389,28 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category: catName, count: 10 })
       });
-      const data = await res.json();
-      setQuizTitle(`${catName} Test`);
-      setQuizCategory(catName);
-      setQuizMcqList(data.questions || []);
-      setQuizModalOpen(true);
-    } catch (e) {
-      console.error(e);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data.questions && data.questions.length > 0) {
+          setQuizTitle(`${catName} Test`);
+          setQuizCategory(catName);
+          setQuizMcqList(data.questions);
+          setQuizModalOpen(true);
+          return;
+        }
+      }
+    } catch {
+      // Local fallback
     }
+
+    const pool = allLocalMcqs.length > 0 ? allLocalMcqs : initialMcqs;
+    const catQuestions = pool.filter(m => m.category === catName || m.subject === catName);
+    const chosenPool = catQuestions.length > 0 ? catQuestions : pool;
+    const shuffled = [...chosenPool].sort(() => 0.5 - Math.random());
+    setQuizTitle(`${catName} Test`);
+    setQuizCategory(catName);
+    setQuizMcqList(shuffled.slice(0, 10));
+    setQuizModalOpen(true);
   };
 
   // Launch Custom Bookmark Quiz
@@ -257,31 +422,38 @@ export default function App() {
   };
 
   const handleBookmarkToggle = async (mcqId: string) => {
+    let currentBookmarks = [...(userProfile?.bookmarkedMcqIds || [])];
+    if (currentBookmarks.includes(mcqId)) {
+      currentBookmarks = currentBookmarks.filter(id => id !== mcqId);
+    } else {
+      currentBookmarks.push(mcqId);
+    }
+
+    const updatedProfile = { ...userProfile, bookmarkedMcqIds: currentBookmarks };
+    setUserProfile(updatedProfile);
+    localStorage.setItem('futureacademy_user_profile', JSON.stringify(updatedProfile));
+
     try {
-      const res = await fetch('/api/user/bookmark', {
+      await fetch('/api/user/bookmark', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mcqId })
       });
-      const data = await res.json();
-      if (userProfile) {
-        setUserProfile({ ...userProfile, bookmarkedMcqIds: data.bookmarkedMcqIds });
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    } catch {}
   };
 
-  if (!settings) {
-    return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-xs font-semibold text-slate-400">Loading Future Academy Pro...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleQuizComplete = (resultObj: QuizResult) => {
+    const updatedHistory = [resultObj, ...(userProfile.quizHistory || [])];
+    const updatedPoints = (userProfile.points || 0) + 50;
+    const updatedProfile: UserProfile = {
+      ...userProfile,
+      points: updatedPoints,
+      quizHistory: updatedHistory
+    };
+    setUserProfile(updatedProfile);
+    localStorage.setItem('futureacademy_user_profile', JSON.stringify(updatedProfile));
+    fetchUserProfile();
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans transition-colors duration-200 flex flex-col">
@@ -628,13 +800,14 @@ export default function App() {
         title={quizTitle}
         categoryName={quizCategory}
         questions={quizMcqList}
-        onQuizComplete={res => fetchUserProfile()}
+        onQuizComplete={handleQuizComplete}
       />
 
       {/* AI Smart Search Modal */}
       <AISearchModal
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
+        allMcqs={allLocalMcqs}
         onSelectMcq={mcqId => {
           setActiveTab('home');
           setTimeout(() => {

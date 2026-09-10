@@ -6,12 +6,14 @@ interface AISearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectMcq?: (mcqId: string) => void;
+  allMcqs?: MCQ[];
 }
 
 export const AISearchModal: React.FC<AISearchModalProps> = ({
   isOpen,
   onClose,
-  onSelectMcq
+  onSelectMcq,
+  allMcqs = []
 }) => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,14 +33,33 @@ export const AISearchModal: React.FC<AISearchModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: searchQuery })
       });
-      const data = await res.json();
-      setAiSummary(data.summary || null);
-      setMatchedMcqs(data.mcqs || []);
-    } catch (err) {
-      console.error(err);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        setAiSummary(data.summary || null);
+        setMatchedMcqs(data.mcqs || []);
+        return;
+      }
+    } catch {
+      // Local smart search fallback
     } finally {
       setLoading(false);
     }
+
+    // Local smart matching fallback
+    const q = searchQuery.toLowerCase().trim();
+    const matches = allMcqs.filter(m =>
+      m.question.toLowerCase().includes(q) ||
+      m.category.toLowerCase().includes(q) ||
+      m.explanation.toLowerCase().includes(q) ||
+      m.tags.some(t => t.toLowerCase().includes(q))
+    ).slice(0, 8);
+
+    setMatchedMcqs(matches);
+    setAiSummary(
+      matches.length > 0
+        ? `Found ${matches.length} highly relevant question${matches.length > 1 ? 's' : ''} matching "${searchQuery}". Key concepts found across ${Array.from(new Set(matches.map(m => m.category))).join(', ')}.`
+        : `No direct matches found for "${searchQuery}". Try searching for core topics like "Islamic Studies", "General Knowledge", "Pakistan Affairs", or "Computer Science".`
+    );
   };
 
   const handleVoiceSearch = () => {

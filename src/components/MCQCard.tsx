@@ -162,21 +162,39 @@ export const MCQCard: React.FC<MCQCardProps> = ({
     e.preventDefault();
     if (!newCommentText.trim()) return;
 
+    const commentText = newCommentText.trim();
+    const author = commentAuthor.trim() || 'Candidate';
+
+    let addedSuccessfully = false;
     try {
       const res = await fetch(`/api/mcqs/${mcq.id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: newCommentText,
-          authorName: commentAuthor || 'Candidate'
+          text: commentText,
+          authorName: author
         })
       });
-      const added = await res.json();
-      setCommentList([...commentList, added]);
-      setNewCommentText('');
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const added = await res.json();
+        setCommentList(prev => [...prev, added]);
+        addedSuccessfully = true;
+      }
     } catch (e) {
       console.error(e);
     }
+
+    if (!addedSuccessfully) {
+      const localComment = {
+        id: 'c-' + Date.now(),
+        author: author,
+        text: commentText,
+        createdAt: new Date().toISOString()
+      };
+      setCommentList(prev => [...prev, localComment]);
+    }
+
+    setNewCommentText('');
   };
 
   const handleDownloadPdf = () => {
