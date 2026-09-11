@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <!-- Metallic Gold Outer Ring Gradient -->
+    <linearGradient id="goldBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="25%" stop-color="#D97706"/>
+      <stop offset="50%" stop-color="#FBBF24"/>
+      <stop offset="75%" stop-color="#B45309"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+
+    <!-- Inner Metallic Bevel Gradient -->
+    <linearGradient id="innerBevel" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#B45309" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#FEF08A" stop-opacity="0.8"/>
+    </linearGradient>
+
+    <!-- Subtle Dome / Gloss Highlight -->
+    <linearGradient id="glassGloss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.15"/>
+    </linearGradient>
+
+    <!-- Circular Clipping Mask -->
+    <clipPath id="circleClip">
+      <circle cx="100" cy="100" r="92"/>
+    </clipPath>
+  </defs>
+
+  <!-- Outer Shadow Ring -->
+  <circle cx="100" cy="100" r="98" fill="none" stroke="#B45309" stroke-width="2" opacity="0.4"/>
+
+  <!-- Outer Heavy Gold Beveled Ring -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="url(#goldBorder)" stroke-width="6"/>
+  <circle cx="100" cy="100" r="92" fill="none" stroke="url(#innerBevel)" stroke-width="2"/>
+
+  <!-- Masked National Flag Content -->
+  <g clip-path="url(#circleClip)">
+    <!-- Deep Pakistani Green Field (#01411C) -->
+    <rect x="0" y="0" width="200" height="200" fill="#01411C"/>
+
+    <!-- White Hoist Stripe on Left Side (27% width = 54px) -->
+    <rect x="0" y="0" width="54" height="200" fill="#FFFFFF"/>
+
+    <!-- Subtle divider line between white and green -->
+    <line x1="54" y1="0" x2="54" y2="200" stroke="#002911" stroke-width="0.75" opacity="0.3"/>
+
+    <!-- Crescent Moon and Star in Green Field (Center at x=127, y=100) -->
+    <g transform="translate(127, 100) rotate(-45)">
+      <!-- Outer Crescent Moon Path -->
+      <!-- Drawn by overlapping outer circle radius 40 and inner circle radius 34.5 shifted right -->
+      <path fill="#FFFFFF" fill-rule="evenodd" d="
+        M 0, -40
+        A 40 40 0 1 0 0, 40
+        A 34 34 0 1 1 0, -40
+        Z
+      "/>
+
+      <!-- Five-Pointed Star tilted towards the top opening of the crescent -->
+      <g transform="translate(30, -5) rotate(18)">
+        <polygon fill="#FFFFFF" points="
+          0,-16
+          4.7,-4.8
+          15.2,-4.8
+          6.7,2.2
+          9.9,13
+          0,6.5
+          -9.9,13
+          -6.7,2.2
+          -15.2,-4.8
+          -4.7,-4.8
+        "/>
+      </g>
+    </g>
+
+    <!-- Dome / Gloss Highlight Layer for authentic 3D medallion look -->
+    <circle cx="100" cy="100" r="92" fill="url(#glassGloss)" pointer-events="none"/>
+  </g>
+
+  <!-- Fine Golden Inner Rim -->
+  <circle cx="100" cy="100" r="92" fill="none" stroke="#D97706" stroke-width="1" opacity="0.7"/>
+</svg>

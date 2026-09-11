@@ -16,10 +16,13 @@ import {
   Play,
   AlertCircle,
   CheckCircle2,
-  FileCheck
+  FileCheck,
+  Award,
+  ListFilter
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import jsPDF from 'jspdf';
+import { CertificateCard } from './CertificateCard';
+import { downloadCertificatePdf, CertificateData } from '../utils/certificateGenerator';
 
 interface QuizModalProps {
   isOpen: boolean;
@@ -64,6 +67,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [timeSeconds, setTimeSeconds] = useState(0);
   const [quizMode, setQuizMode] = useState<'Practice' | 'Exam'>(mode);
   const [enableNegativeMarking, setEnableNegativeMarking] = useState(false);
+  const [resultTab, setResultTab] = useState<'certificate' | 'review'>('certificate');
 
   // When modal is reopened, reload stored candidate info and show candidate entry screen
   useEffect(() => {
@@ -82,6 +86,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       setTimeSeconds(0);
       setCandidateError('');
       setQuizMode(mode);
+      setResultTab('certificate');
     }
   }, [isOpen, mode]);
 
@@ -224,66 +229,22 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
   const handleDownloadCertificate = () => {
     const scoreData = calculateScore();
-    const doc = new jsPDF('landscape');
-
-    // Certificate border
-    doc.setLineWidth(2);
-    doc.rect(10, 10, 277, 190);
-    doc.setLineWidth(0.5);
-    doc.rect(13, 13, 271, 184);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(26);
-    doc.text('CERTIFICATE OF ACCOMPLISHMENT', 148, 45, { align: 'center' });
-
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'normal');
-    doc.text('This is proudly awarded to', 148, 65, { align: 'center' });
-
-    // Candidate Name
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
-    doc.text(candidateName.trim() || 'Candidate', 148, 83, { align: 'center' });
-
-    // Candidate Email
-    if (candidateEmail.trim()) {
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Candidate Email: ${candidateEmail.trim()}`, 148, 92, { align: 'center' });
-    }
-
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'normal');
-    doc.text(
-      `For successfully completing the ${title} (${categoryName}) Test with an overall score of ${scoreData.percentage}%.`,
-      148,
-      110,
-      { align: 'center' }
-    );
-
-    doc.setFontSize(11);
-    doc.text(
-      `Total Questions: ${questions.length} | Correct: ${scoreData.correct} | Time Taken: ${formatTime(timeSeconds)} | Mode: ${quizMode}`,
-      148,
-      130,
-      { align: 'center' }
-    );
-
-    doc.setFontSize(10);
-    doc.text(
-      `Issued by Future Academy Pro Examination Board - Date: ${new Date().toLocaleDateString()}`,
-      148,
-      160,
-      { align: 'center' }
-    );
-
-    const safeFilename = (candidateName.trim() || 'Candidate').replace(/[^a-z0-9]/gi, '_');
-    doc.save(`FutureAcademyPro_${safeFilename}_Certificate.pdf`);
+    downloadCertificatePdf({
+      candidateName: candidateName.trim(),
+      candidateEmail: candidateEmail.trim(),
+      quizTitle: title,
+      categoryName: categoryName,
+      scorePercentage: scoreData.percentage,
+      correctAnswers: scoreData.correct,
+      totalQuestions: questions.length,
+      timeSeconds: timeSeconds,
+      quizMode: quizMode
+    });
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-auto">
+      <div className={`bg-white dark:bg-slate-900 rounded-3xl ${isCompleted ? 'max-w-4xl' : 'max-w-3xl'} w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-auto transition-all`}>
         
         {/* Top Header */}
         <div className="bg-slate-900 text-white p-4 sm:p-5 flex items-center justify-between border-b border-slate-800">
@@ -635,33 +596,48 @@ export const QuizModal: React.FC<QuizModalProps> = ({
           </div>
         ) : (
           /* 3. QUIZ RESULT & SCORECARD SCREEN */
-          <div className="p-6 text-center">
-            <div className="inline-flex p-4 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-3">
-              <Trophy className="w-10 h-10 animate-bounce" />
+          <div className="p-5 sm:p-7 text-center space-y-6">
+            <div>
+              <div className="inline-flex p-3 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-2 shadow-inner">
+                <Trophy className="w-8 h-8 animate-bounce" />
+              </div>
+
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
+                Examination Completed!
+              </h3>
+
+              {/* Candidate Name and Email display */}
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 max-w-fit mx-auto mt-2">
+                <User className="w-3.5 h-3.5" />
+                <span>{candidateName}</span>
+                <span className="text-slate-400">|</span>
+                <Mail className="w-3.5 h-3.5" />
+                <span>{candidateEmail}</span>
+              </div>
+
+              <p className="text-xs text-slate-500 mt-1">
+                Verified candidate assessment record in {title} ({categoryName}).
+              </p>
             </div>
-
-            <h3 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-1">
-              Quiz Completed!
-            </h3>
-
-            {/* Candidate Name and Email display */}
-            <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 max-w-fit mx-auto mb-2">
-              <User className="w-3.5 h-3.5" />
-              <span>{candidateName}</span>
-              <span className="text-slate-400">|</span>
-              <Mail className="w-3.5 h-3.5" />
-              <span>{candidateEmail}</span>
-            </div>
-
-            <p className="text-xs text-slate-500 mb-6">
-              Here is your verified scorecard in {title}.
-            </p>
 
             {(() => {
               const res = calculateScore();
+              const certData: CertificateData = {
+                candidateName: candidateName.trim() || 'Candidate',
+                candidateEmail: candidateEmail.trim(),
+                quizTitle: title,
+                categoryName: categoryName,
+                scorePercentage: res.percentage,
+                correctAnswers: res.correct,
+                totalQuestions: questions.length,
+                timeSeconds: timeSeconds,
+                quizMode: quizMode
+              };
+
               return (
-                <div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                <div className="space-y-6">
+                  {/* Summary Metric Counters */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
                       <span className="text-[10px] text-slate-400 uppercase font-bold block">
                         Score
@@ -696,8 +672,121 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-center gap-3">
+                  {/* Tab Navigation: Certificate vs Review */}
+                  <div className="flex items-center justify-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl max-w-sm mx-auto border border-slate-200 dark:border-slate-700 text-xs font-bold">
                     <button
+                      type="button"
+                      onClick={() => setResultTab('certificate')}
+                      className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition ${
+                        resultTab === 'certificate'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <Award className="w-3.5 h-3.5" /> Official Certificate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setResultTab('review')}
+                      className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 transition ${
+                        resultTab === 'review'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <ListFilter className="w-3.5 h-3.5" /> Review Questions
+                    </button>
+                  </div>
+
+                  {/* Tab 1: Certificate Preview & Download */}
+                  {resultTab === 'certificate' && (
+                    <div className="pt-2">
+                      <CertificateCard data={certData} />
+                    </div>
+                  )}
+
+                  {/* Tab 2: Detailed Question Review */}
+                  {resultTab === 'review' && (
+                    <div className="space-y-3.5 text-left max-h-[460px] overflow-y-auto pr-2">
+                      {questions.map((q, idx) => {
+                        const userAns = userAnswers[idx];
+                        const isCorrect = userAns === q.correctAnswer;
+                        const isSkipped = !userAns;
+
+                        return (
+                          <div
+                            key={q.id || idx}
+                            className={`p-4 rounded-2xl border transition-colors ${
+                              isCorrect
+                                ? 'bg-emerald-500/5 border-emerald-500/30'
+                                : isSkipped
+                                ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                                : 'bg-rose-500/5 border-rose-500/30'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <span className="text-xs font-bold text-slate-500">
+                                Question {idx + 1}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isCorrect
+                                    ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                    : isSkipped
+                                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                                    : 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
+                                }`}
+                              >
+                                {isCorrect ? '✓ Correct' : isSkipped ? '○ Skipped' : '✗ Incorrect'}
+                              </span>
+                            </div>
+
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3">
+                              {q.question}
+                            </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs mb-2">
+                              {q.options.map(opt => {
+                                const isSelected = userAns === opt.id;
+                                const isRight = opt.id === q.correctAnswer;
+                                let optStyle =
+                                  'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300';
+                                if (isRight) {
+                                  optStyle =
+                                    'bg-emerald-500/10 border-emerald-500 text-emerald-800 dark:text-emerald-300 font-bold';
+                                } else if (isSelected && !isRight) {
+                                  optStyle =
+                                    'bg-rose-500/10 border-rose-500 text-rose-800 dark:text-rose-300';
+                                }
+                                return (
+                                  <div
+                                    key={opt.id}
+                                    className={`p-2 rounded-xl border flex items-center gap-2 ${optStyle}`}
+                                  >
+                                    <span className="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] border">
+                                      {opt.id}
+                                    </span>
+                                    <span className="truncate">{opt.text}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {q.explanation && (
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-xl mt-2">
+                                💡 <strong>Explanation:</strong> {q.explanation}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Retake & Action Buttons */}
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
                       onClick={() => {
                         setIsCompleted(false);
                         setCurrentIndex(0);
@@ -707,14 +796,15 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                       }}
                       className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition"
                     >
-                      <RotateCcw className="w-4 h-4" /> Retake / Change Details
+                      <RotateCcw className="w-4 h-4" /> Retake Quiz
                     </button>
 
                     <button
+                      type="button"
                       onClick={handleDownloadCertificate}
-                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-emerald-600/20"
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-emerald-600/20 active:scale-95"
                     >
-                      <Download className="w-4 h-4" /> Download Certificate PDF
+                      <Download className="w-4 h-4" /> Download PDF Certificate
                     </button>
                   </div>
                 </div>
