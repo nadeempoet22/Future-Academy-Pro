@@ -36,6 +36,7 @@ import {
   Mail
 } from 'lucide-react';
 import Papa from 'papaparse';
+import { parseBulkContent, ParsedMCQItem } from '../utils/bulkParser';
 
 interface AdminPanelProps {
   settings: SiteSettings;
@@ -457,123 +458,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
-  // Parse CSV or JSON content string
+  // Parse CSV or JSON content string using universal robust bulk parser
   const parseRawContent = (content: string, format: 'csv' | 'json', targetCat: string) => {
-    const errors: string[] = [];
-    let items: any[] = [];
-
     if (!content.trim()) {
       setParsedItems([]);
       setParseErrors([]);
       return;
     }
 
-    if (format === 'json') {
-      try {
-        const parsed = JSON.parse(content);
-        const rawArray = Array.isArray(parsed)
-          ? parsed
-          : Array.isArray(parsed.items)
-          ? parsed.items
-          : Array.isArray(parsed.questions)
-          ? parsed.questions
-          : Array.isArray(parsed.mcqs)
-          ? parsed.mcqs
-          : [];
-
-        if (!Array.isArray(rawArray) || rawArray.length === 0) {
-          errors.push('JSON data must be an array of questions or contain an "items" / "questions" array.');
-        } else {
-          items = rawArray.map((row: any, idx: number) => {
-            const q = row.question || row.Question || row.title || '';
-            if (!q) {
-              errors.push(`Item #${idx + 1}: Missing question text.`);
-            }
-
-            let options = row.options;
-            if (!Array.isArray(options) || options.length === 0) {
-              options = [
-                { id: 'A', text: row.optionA || row.OptionA || row.A || row.optA || '' },
-                { id: 'B', text: row.optionB || row.OptionB || row.B || row.optB || '' },
-                { id: 'C', text: row.optionC || row.OptionC || row.C || row.optC || '' },
-                { id: 'D', text: row.optionD || row.OptionD || row.D || row.optD || '' }
-              ];
-            }
-
-            const rawAns = (row.correctAnswer || row.CorrectAnswer || row.answer || row.Answer || 'A').toString().trim().toUpperCase();
-            const validAns = ['A', 'B', 'C', 'D'].includes(rawAns) ? rawAns : 'A';
-
-            const finalCat = targetCat !== '__file__'
-              ? targetCat
-              : (row.category || row.Category || 'General Knowledge');
-
-            return {
-              question: q,
-              options,
-              correctAnswer: validAns,
-              explanation: row.explanation || row.Explanation || 'Answer verified by subject expert.',
-              reference: row.reference || row.Reference || 'JSON Bulk Import',
-              category: finalCat,
-              subcategory: row.subcategory || row.Subcategory || '',
-              difficulty: row.difficulty || row.Difficulty || 'Medium'
-            };
-          });
-        }
-      } catch (e: any) {
-        errors.push(`JSON syntax error: ${e.message}`);
-      }
-    } else {
-      // CSV format via Papa
-      try {
-        const results = Papa.parse(content, {
-          header: true,
-          skipEmptyLines: true
-        });
-
-        if (results.errors && results.errors.length > 0) {
-          results.errors.slice(0, 3).forEach(err => errors.push(`CSV Line ${err.row}: ${err.message}`));
-        }
-
-        items = results.data.map((row: any, idx: number) => {
-          const q = row.Question || row.question || row.Title || '';
-          if (!q) {
-            errors.push(`Row ${idx + 1}: Missing question text.`);
-          }
-
-          const optA = row.OptionA || row.optionA || row.A || row.optA || '';
-          const optB = row.OptionB || row.optionB || row.B || row.optB || '';
-          const optC = row.OptionC || row.optionC || row.C || row.optC || '';
-          const optD = row.OptionD || row.optionD || row.D || row.optD || '';
-
-          const rawAns = (row.CorrectAnswer || row.correctAnswer || row.Answer || row.answer || 'A').toString().trim().toUpperCase();
-          const validAns = ['A', 'B', 'C', 'D'].includes(rawAns) ? rawAns : 'A';
-
-          const finalCat = targetCat !== '__file__'
-            ? targetCat
-            : (row.Category || row.category || 'General Knowledge');
-
-          return {
-            question: q,
-            options: [
-              { id: 'A', text: optA },
-              { id: 'B', text: optB },
-              { id: 'C', text: optC },
-              { id: 'D', text: optD }
-            ],
-            correctAnswer: validAns,
-            explanation: row.Explanation || row.explanation || 'Answer verified by subject expert.',
-            reference: row.Reference || row.reference || 'CSV Bulk Import',
-            category: finalCat,
-            subcategory: row.Subcategory || row.subcategory || '',
-            difficulty: row.Difficulty || row.difficulty || 'Medium'
-          };
-        });
-      } catch (e: any) {
-        errors.push(`CSV parsing error: ${e.message}`);
-      }
-    }
-
-    setParsedItems(items.filter(it => it.question));
+    const { items, errors } = parseBulkContent(content, format, targetCat);
+    setParsedItems(items);
     setParseErrors(errors);
   };
 
@@ -1676,10 +1570,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               ))}
                             </div>
                           </td>
-                          <td className="p-3 text-center font-bold text-emerald-600">
-                            <span className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 inline-flex items-center justify-center">
-                              {item.correctAnswer}
-                            </span>
+                          <td className="p-3 text-center">
+                            <div className="inline-flex items-center gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                              {(['A', 'B', 'C', 'D'] as const).map(optKey => (
+                                <button
+                                  key={optKey}
+                                  type="button"
+                                  onClick={() => {
+                                    setParsedItems(prev =>
+                                      prev.map((it, i) =>
+                                        i === idx ? { ...it, correctAnswer: optKey } : it
+                                      )
+                                    );
+                                  }}
+                                  title={`Set Option ${optKey} as correct answer`}
+                                  className={`w-6 h-6 rounded text-[11px] font-bold transition-all ${
+                                    item.correctAnswer === optKey
+                                      ? 'bg-emerald-600 text-white shadow-sm scale-105'
+                                      : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                  }`}
+                                >
+                                  {optKey}
+                                </button>
+                              ))}
+                            </div>
                           </td>
                           <td className="p-3">
                             <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[11px]">

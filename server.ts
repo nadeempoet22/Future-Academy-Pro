@@ -11,6 +11,7 @@ import {
   initialUserProfile
 } from './src/data/seedData.js';
 import { MCQ, Category, BlogPost, SiteSettings, UserProfile, QuizResult, Comment } from './src/types.js';
+import { resolveCorrectAnswer } from './src/utils/bulkParser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -341,7 +342,6 @@ async function startServer() {
     items.forEach((item: any) => {
       const question = item.question || item.Question;
       const finalCategory = targetCategory || item.category || item.Category || 'General Knowledge';
-      const correctAnswer = (item.correctAnswer || item.CorrectAnswer || item.answer || item.Answer || 'A').toString().trim().toUpperCase();
 
       let options = item.options;
       if (!Array.isArray(options) || options.length === 0) {
@@ -353,12 +353,15 @@ async function startServer() {
         ];
       }
 
-      if (question && options.length >= 2 && correctAnswer) {
+      const rawAnswer = item.correctAnswer || item.CorrectAnswer || item.correct_answer || item.correctOption || item.correct_option || item.answer || item.Answer || item.ans || item.key;
+      const validCorrectAnswer = resolveCorrectAnswer(rawAnswer, options);
+
+      if (question && options.length >= 2) {
         mcqs.unshift({
           id: `mcq-bulk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           question: question.trim(),
           options,
-          correctAnswer: ['A', 'B', 'C', 'D'].includes(correctAnswer) ? correctAnswer : 'A',
+          correctAnswer: validCorrectAnswer,
           explanation: item.explanation || item.Explanation || 'Verified question.',
           reference: item.reference || item.Reference || 'Bulk Import Collection',
           subject: item.subject || finalCategory,
