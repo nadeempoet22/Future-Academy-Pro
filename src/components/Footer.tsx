@@ -46,11 +46,15 @@ export const Footer: React.FC<FooterProps> = ({
             <div className="space-y-2 pt-2 text-slate-400">
               <div className="flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>{settings.contactEmail}</span>
+                <a href={`mailto:${settings.contactEmail}`} className="hover:text-emerald-400 transition">
+                  {settings.contactEmail}
+                </a>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>{settings.contactPhone}</span>
+                <a href={`tel:${settings.contactPhone.replace(/\s+/g, '')}`} className="hover:text-emerald-400 transition">
+                  {settings.contactPhone}
+                </a>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />

@@ -1832,6 +1832,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               />
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="font-bold block mb-1">Contact Phone Number</label>
+                <input
+                  type="text"
+                  value={siteForm.contactPhone || ''}
+                  onChange={e => setSiteForm({ ...siteForm, contactPhone: e.target.value })}
+                  placeholder="+92 326 3624500"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">Contact Email</label>
+                <input
+                  type="email"
+                  value={siteForm.contactEmail || ''}
+                  onChange={e => setSiteForm({ ...siteForm, contactEmail: e.target.value })}
+                  placeholder="support@futureacademypro.com"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="font-bold block mb-1">Office / Postal Address</label>
+              <input
+                type="text"
+                value={siteForm.address || ''}
+                onChange={e => setSiteForm({ ...siteForm, address: e.target.value })}
+                placeholder="Agriculture Work Shop, Dadu, Sindh, Pakistan"
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+              />
+            </div>
+
             <div>
               <label className="font-bold block mb-1">Top Announcement Bar Text</label>
               <input

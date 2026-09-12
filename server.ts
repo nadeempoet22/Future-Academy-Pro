@@ -12,6 +12,7 @@ import {
 } from './src/data/seedData.js';
 import { MCQ, Category, BlogPost, SiteSettings, UserProfile, QuizResult, Comment } from './src/types.js';
 import { resolveCorrectAnswer } from './src/utils/bulkParser.js';
+import { findQuickFact } from './src/data/knowledgeBase.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -543,29 +544,81 @@ Please structure your response in clean Markdown with:
       const { query } = req.body;
       if (!query) return res.status(400).json({ error: 'Query is required' });
 
-      const ai = getGeminiClient();
+      // Match MCQs with token and acronym intelligence
+      const qClean = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+      const stopWords = new Set(['who', 'is', 'the', 'of', 'in', 'and', 'what', 'which', 'was', 'were', 'to', 'for', 'a', 'an', 'are', 'how']);
+      const tokens = qClean.split(/\s+/).filter((w: string) => w.length > 1 && !stopWords.has(w));
 
-      // Find relevant MCQs using text match or Gemini AI
-      const matchedLocal = mcqs.filter(m =>
-        m.question.toLowerCase().includes(query.toLowerCase()) ||
-        m.category.toLowerCase().includes(query.toLowerCase()) ||
-        m.tags.some(t => t.toLowerCase().includes(query.toLowerCase()))
-      );
+      const scoredMcqs: { mcq: MCQ; score: number }[] = [];
+      mcqs.forEach(m => {
+        const qText = m.question.toLowerCase();
+        const expText = (m.explanation || '').toLowerCase();
+        const catText = (m.category || '').toLowerCase();
+        const tagsText = (m.tags || []).join(' ').toLowerCase();
 
-      const prompt = `A student preparing for Pakistan competitive exams searched for: "${query}".
-Provide a concise 3-bullet concept summary answering this search topic, followed by key exam memory pointers.`;
+        let score = 0;
+        if (qText.includes(qClean)) score += 20;
+        if (expText.includes(qClean)) score += 12;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
-        contents: prompt
+        tokens.forEach((t: string) => {
+          if (qText.includes(t)) score += 5;
+          if (expText.includes(t)) score += 3;
+          if (tagsText.includes(t)) score += 4;
+          if (catText.includes(t)) score += 2;
+        });
+
+        if (tokens.includes('pm') && (qText.includes('prime minister') || tagsText.includes('prime minister') || expText.includes('prime minister'))) {
+          score += 15;
+        }
+
+        if (score > 0) scoredMcqs.push({ mcq: m, score });
       });
+
+      scoredMcqs.sort((a, b) => b.score - a.score);
+      const topMatches = scoredMcqs.slice(0, 8).map(s => s.mcq);
+
+      // Check knowledge base fact
+      const fact = findQuickFact(query);
+
+      // Try Gemini API if key is available
+      try {
+        const ai = getGeminiClient();
+        const prompt = `A student preparing for Pakistan competitive exams searched for: "${query}".
+Provide a concise 3-bullet concept summary directly answering this search topic, followed by key exam memory pointers.`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: prompt
+        });
+
+        if (response.text) {
+          return res.json({
+            summary: response.text,
+            mcqs: topMatches.length > 0 ? topMatches : mcqs.slice(0, 3)
+          });
+        }
+      } catch (aiErr) {
+        // Fall back gracefully to built-in knowledge base if Gemini key is missing
+      }
+
+      // Fallback response using built-in knowledge base & matched MCQs
+      let fallbackSummary = '';
+      if (fact) {
+        fallbackSummary = `**${fact.title}**\n\n${fact.answer}\n\nKey exam facts:\n` +
+          fact.pointers.map(p => `• ${p}`).join('\n');
+      } else if (topMatches.length > 0) {
+        const categories = Array.from(new Set(topMatches.map(m => m.category))).join(', ');
+        fallbackSummary = `Found ${topMatches.length} verified exam question${topMatches.length > 1 ? 's' : ''} for "${query}" across: ${categories}.`;
+      } else {
+        fallbackSummary = `No direct questions found for "${query}". Try searching for core topics like Pakistan Affairs, Current Affairs, Islamic Studies, or General Knowledge.`;
+      }
 
       res.json({
-        summary: response.text,
-        mcqs: matchedLocal.length > 0 ? matchedLocal.slice(0, 5) : mcqs.slice(0, 3)
+        summary: fallbackSummary,
+        mcqs: topMatches
       });
     } catch (err: any) {
-      console.error('Gemini AI Search Error:', err);
+      console.error('Smart search error:', err);
       res.status(500).json({ error: err.message || 'Smart search unavailable' });
     }
   });

@@ -9,8 +9,8 @@ export const initialSiteSettings: SiteSettings = {
   metaDescription: 'Solve 50,000+ solved MCQs for FPSC, PPSC, KPPSC, BPSC, SPSC, NTS, CSS, PMS, General Knowledge, Pakistan Affairs, Current Affairs, Everyday Science, Islamic Studies & Computer Science.',
   keywords: 'Future Academy Pro, FPSC MCQs, PPSC MCQs, NTS Test Prep, CSS Exam MCQs, Pakistan Affairs MCQs, Current Affairs 2026, Computer Science MCQs, Islamic Studies MCQs',
   contactEmail: 'support@futureacademypro.com',
-  contactPhone: '+92 300 1234567',
-  address: 'Constitution Avenue, Sector G-5/1, Islamabad, Pakistan',
+  contactPhone: '+92 326 3624500',
+  address: 'Agriculture Work Shop, Dadu, Sindh, Pakistan',
   announcementText: '🔥 New FPSC & PPSC Mock Tests 2026 added! Take the Daily Quiz to boost your score.',
   isAnnouncementActive: true,
   adConfig: {

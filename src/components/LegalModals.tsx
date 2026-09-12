@@ -49,12 +49,16 @@ export const LegalModals: React.FC<LegalModalsProps> = ({
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <Mail className="w-4 h-4 text-emerald-500 mb-1" />
                 <span className="font-bold block text-slate-800 dark:text-slate-200">Email</span>
-                <span className="text-slate-500">{settings.contactEmail}</span>
+                <a href={`mailto:${settings.contactEmail}`} className="text-slate-500 hover:text-emerald-600 transition">
+                  {settings.contactEmail}
+                </a>
               </div>
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <Phone className="w-4 h-4 text-emerald-500 mb-1" />
                 <span className="font-bold block text-slate-800 dark:text-slate-200">Phone</span>
-                <span className="text-slate-500">{settings.contactPhone}</span>
+                <a href={`tel:${settings.contactPhone.replace(/\s+/g, '')}`} className="text-slate-500 hover:text-emerald-600 transition">
+                  {settings.contactPhone}
+                </a>
               </div>
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <MapPin className="w-4 h-4 text-emerald-500 mb-1" />

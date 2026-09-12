@@ -66,10 +66,8 @@ export default function App() {
     return false;
   });
 
-  // App Navigation & Selected Category
-  const [activeTab, setActiveTab] = useState<'home' | 'categories' | 'blog' | 'user' | 'admin'>(() => {
-    return checkIsAdminRoute() ? 'admin' : 'home';
-  });
+  // App Navigation & Selected Category - Always starts on 'home' when refreshed
+  const [activeTab, setActiveTab] = useState<'home' | 'categories' | 'blog' | 'user' | 'admin'>('home');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [adminCategoryForAdd, setAdminCategoryForAdd] = useState<string | null>(null);
 
@@ -78,7 +76,22 @@ export default function App() {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('futureacademy_settings');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          let updated = false;
+          if (parsed && (parsed.contactPhone === '+92 300 1234567' || !parsed.contactPhone)) {
+            parsed.contactPhone = '+92 326 3624500';
+            updated = true;
+          }
+          if (parsed && (parsed.address === 'Constitution Avenue, Sector G-5/1, Islamabad, Pakistan' || !parsed.address)) {
+            parsed.address = 'Agriculture Work Shop, Dadu, Sindh, Pakistan';
+            updated = true;
+          }
+          if (updated) {
+            localStorage.setItem('futureacademy_settings', JSON.stringify(parsed));
+          }
+          return parsed;
+        }
       } catch {}
     }
     return initialSiteSettings;
@@ -186,8 +199,15 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // URL route monitoring: #admin or /admin opens admin panel
+  // URL route monitoring: ensure refresh returns to Home page, while preserving Ctrl+Shift+A or Alt+A shortcut
   useEffect(() => {
+    // When the page refreshes, clear any leftover hash/subroute to land squarely on Home
+    if (typeof window !== 'undefined') {
+      if (window.location.hash || window.location.pathname === '/admin') {
+        window.history.replaceState(null, '', window.location.pathname === '/admin' ? '/' : window.location.pathname + window.location.search);
+      }
+    }
+
     const handleUrlRoute = () => {
       if (checkIsAdminRoute()) {
         setActiveTab('admin');
@@ -328,13 +348,42 @@ export default function App() {
       filtered = filtered.filter(m => m.difficulty.toLowerCase() === difficultyFilter.toLowerCase());
     }
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(m =>
-        m.question.toLowerCase().includes(q) ||
-        m.explanation.toLowerCase().includes(q) ||
-        m.category.toLowerCase().includes(q) ||
-        m.tags.some(t => t.toLowerCase().includes(q))
-      );
+      const q = searchQuery.toLowerCase().trim();
+      const qClean = q.replace(/[^a-z0-9\s]/g, ' ');
+      const stopWords = new Set(['who', 'is', 'the', 'of', 'in', 'and', 'what', 'which', 'was', 'were', 'to', 'for', 'a', 'an', 'are', 'how']);
+      const tokens = qClean.split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w));
+
+      filtered = filtered.filter(m => {
+        const qText = m.question.toLowerCase();
+        const expText = (m.explanation || '').toLowerCase();
+        const catText = (m.category || '').toLowerCase();
+        const tagsText = (m.tags || []).join(' ').toLowerCase();
+        const optionsText = (m.options || []).map(o => o.text).join(' ').toLowerCase();
+
+        // Exact phrase
+        if (qText.includes(q) || expText.includes(q) || catText.includes(q) || tagsText.includes(q)) {
+          return true;
+        }
+
+        // Acronym match: pm -> prime minister
+        if (tokens.includes('pm') && (qText.includes('prime minister') || tagsText.includes('prime minister') || expText.includes('prime minister'))) {
+          return true;
+        }
+
+        // Token match: at least one core token matches
+        if (tokens.length > 0) {
+          const matchCount = tokens.filter(t =>
+            qText.includes(t) ||
+            expText.includes(t) ||
+            catText.includes(t) ||
+            tagsText.includes(t) ||
+            optionsText.includes(t)
+          ).length;
+          return matchCount > 0;
+        }
+
+        return false;
+      });
     }
 
     if (sortBy === 'most_viewed') {
@@ -555,6 +604,11 @@ export default function App() {
                       onChange={e => {
                         setSearchQuery(e.target.value);
                         setCurrentPage(1);
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && searchQuery.trim()) {
+                          setShowSearchModal(true);
+                        }
                       }}
                       placeholder="Search questions e.g. 'Pakistan Affairs', 'Prepositions', 'MS Word'..."
                       className="w-full pl-12 pr-28 py-3.5 rounded-2xl bg-white/10 dark:bg-slate-800/80 backdrop-blur-md border border-white/20 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -848,6 +902,7 @@ export default function App() {
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
         allMcqs={allLocalMcqs}
+        initialQuery={searchQuery}
         onSelectMcq={mcqId => {
           setActiveTab('home');
           setTimeout(() => {

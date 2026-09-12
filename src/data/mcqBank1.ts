@@ -259,6 +259,56 @@ export const mcqBank1: MCQ[] = [
   // 2. CURRENT AFFAIRS (10 Questions)
   // ==========================================
   {
+    id: 'ca-pm-current',
+    question: 'Who is the current Prime Minister of Pakistan?',
+    options: [
+      { id: 'A', text: 'Imran Khan' },
+      { id: 'B', text: 'Mian Muhammad Shehbaz Sharif' },
+      { id: 'C', text: 'Anwaar-ul-Haq Kakar' },
+      { id: 'D', text: 'Bilawal Bhutto Zardari' }
+    ],
+    correctAnswer: 'B',
+    explanation: 'Mian Muhammad Shehbaz Sharif took oath as the 24th Prime Minister of Pakistan on March 4, 2024 following the general elections held on February 8, 2024.',
+    reference: 'Prime Minister Office Pakistan / National Assembly Records',
+    subject: 'Current Affairs',
+    category: 'Current Affairs',
+    subcategory: 'Pakistan Current Affairs',
+    difficulty: 'Easy',
+    tags: ['Prime Minister', 'Shehbaz Sharif', 'Current Affairs', 'PM of Pakistan'],
+    author: 'Admin Examination Board',
+    views: 22100,
+    likes: 680,
+    dislikes: 12,
+    createdAt: '2026-03-01T10:00:00Z',
+    isFeatured: true,
+    comments: []
+  },
+  {
+    id: 'ca-president-current',
+    question: 'Who is the current President of Pakistan?',
+    options: [
+      { id: 'A', text: 'Dr. Arif Alvi' },
+      { id: 'B', text: 'Asif Ali Zardari' },
+      { id: 'C', text: 'Yousaf Raza Gillani' },
+      { id: 'D', text: 'Sadiq Sanjrani' }
+    ],
+    correctAnswer: 'B',
+    explanation: 'Asif Ali Zardari took oath as the 14th President of Pakistan on March 10, 2024. He previously served as President from 2008 to 2013.',
+    reference: 'Aiwan-e-Sadr Official Portal / Cabinet Division',
+    subject: 'Current Affairs',
+    category: 'Current Affairs',
+    subcategory: 'Pakistan Current Affairs',
+    difficulty: 'Easy',
+    tags: ['President', 'Asif Ali Zardari', 'Current Affairs', 'Head of State'],
+    author: 'Admin Examination Board',
+    views: 19800,
+    likes: 590,
+    dislikes: 10,
+    createdAt: '2026-03-05T10:00:00Z',
+    isFeatured: true,
+    comments: []
+  },
+  {
     id: 'ca-1',
     question: 'Who took oath as the 30th Chief Justice of Pakistan in October 2024?',
     options: [
