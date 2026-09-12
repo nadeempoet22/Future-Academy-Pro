@@ -33,7 +33,8 @@ import {
   EyeOff,
   LogOut,
   User,
-  Mail
+  Mail,
+  CreditCard
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { parseBulkContent, ParsedMCQItem } from '../utils/bulkParser';
@@ -1885,6 +1886,147 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               />
               <span>Enable Top Announcement Bar</span>
             </label>
+
+            {/* Certificate Fee & Payment Configuration */}
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-5 mt-5 space-y-4">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
+                <CreditCard className="w-4 h-4" />
+                <span>Quiz Certificate Payment Settings (NayaPay / RS 200)</span>
+              </div>
+
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={siteForm.certificatePayment?.isPaymentRequired ?? true}
+                  onChange={e =>
+                    setSiteForm({
+                      ...siteForm,
+                      certificatePayment: {
+                        ...(siteForm.certificatePayment || {
+                          isPaymentRequired: true,
+                          feeAmount: 200,
+                          currency: 'PKR',
+                          accountNumber: '03482640086',
+                          accountTitle: 'Future Academy Pro / Engr Nadeem Ali',
+                          bankName: 'NAYA PAY',
+                          instructions: 'Send RS 200 to NayaPay account 03482640086.'
+                        }),
+                        isPaymentRequired: e.target.checked
+                      }
+                    })
+                  }
+                />
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  Require Fee Before Certificate PDF Download (Paid Certificate)
+                </span>
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="font-bold block mb-1 text-xs">Fee Amount (PKR)</label>
+                  <input
+                    type="number"
+                    value={siteForm.certificatePayment?.feeAmount ?? 200}
+                    onChange={e =>
+                      setSiteForm({
+                        ...siteForm,
+                        certificatePayment: {
+                          ...(siteForm.certificatePayment || {
+                            isPaymentRequired: true,
+                            feeAmount: 200,
+                            currency: 'PKR',
+                            accountNumber: '03482640086',
+                            accountTitle: 'Future Academy Pro / Engr Nadeem Ali',
+                            bankName: 'NAYA PAY',
+                            instructions: 'Send RS 200 to NayaPay account 03482640086.'
+                          }),
+                          feeAmount: Number(e.target.value) || 200
+                        }
+                      })
+                    }
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold block mb-1 text-xs">Bank / Wallet Name</label>
+                  <input
+                    type="text"
+                    value={siteForm.certificatePayment?.bankName || 'NAYA PAY'}
+                    onChange={e =>
+                      setSiteForm({
+                        ...siteForm,
+                        certificatePayment: {
+                          ...(siteForm.certificatePayment || {
+                            isPaymentRequired: true,
+                            feeAmount: 200,
+                            currency: 'PKR',
+                            accountNumber: '03482640086',
+                            accountTitle: 'Future Academy Pro / Engr Nadeem Ali',
+                            bankName: 'NAYA PAY',
+                            instructions: 'Send RS 200 to NayaPay account 03482640086.'
+                          }),
+                          bankName: e.target.value
+                        }
+                      })
+                    }
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold block mb-1 text-xs">Account Number</label>
+                  <input
+                    type="text"
+                    value={siteForm.certificatePayment?.accountNumber || '03482640086'}
+                    onChange={e =>
+                      setSiteForm({
+                        ...siteForm,
+                        certificatePayment: {
+                          ...(siteForm.certificatePayment || {
+                            isPaymentRequired: true,
+                            feeAmount: 200,
+                            currency: 'PKR',
+                            accountNumber: '03482640086',
+                            accountTitle: 'Future Academy Pro / Engr Nadeem Ali',
+                            bankName: 'NAYA PAY',
+                            instructions: 'Send RS 200 to NayaPay account 03482640086.'
+                          }),
+                          accountNumber: e.target.value
+                        }
+                      })
+                    }
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1 text-xs">Account Title / Receiver Name</label>
+                <input
+                  type="text"
+                  value={siteForm.certificatePayment?.accountTitle || 'Future Academy Pro / Engr Nadeem Ali'}
+                  onChange={e =>
+                    setSiteForm({
+                      ...siteForm,
+                      certificatePayment: {
+                        ...(siteForm.certificatePayment || {
+                          isPaymentRequired: true,
+                          feeAmount: 200,
+                          currency: 'PKR',
+                          accountNumber: '03482640086',
+                          accountTitle: 'Future Academy Pro / Engr Nadeem Ali',
+                          bankName: 'NAYA PAY',
+                          instructions: 'Send RS 200 to NayaPay account 03482640086.'
+                        }),
+                        accountTitle: e.target.value
+                      }
+                    })
+                  }
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                />
+              </div>
+            </div>
 
             <button
               type="submit"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MCQ, QuizResult } from '../types';
+import { MCQ, QuizResult, CertificatePaymentConfig } from '../types';
 import {
   Clock,
   CheckCircle,
@@ -18,10 +18,13 @@ import {
   CheckCircle2,
   FileCheck,
   Award,
-  ListFilter
+  ListFilter,
+  Lock,
+  CreditCard
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CertificateCard } from './CertificateCard';
+import { CertificatePaymentGate } from './CertificatePaymentGate';
 import { downloadCertificatePdf, CertificateData } from '../utils/certificateGenerator';
 
 interface QuizModalProps {
@@ -32,6 +35,7 @@ interface QuizModalProps {
   questions: MCQ[];
   mode?: 'Practice' | 'Exam';
   onQuizComplete?: (result: QuizResult) => void;
+  paymentConfig?: CertificatePaymentConfig;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
@@ -41,7 +45,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   categoryName = 'General',
   questions,
   mode = 'Practice',
-  onQuizComplete
+  onQuizComplete,
+  paymentConfig
 }) => {
   const [candidateName, setCandidateName] = useState<string>(() => {
     try {
@@ -69,6 +74,20 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [enableNegativeMarking, setEnableNegativeMarking] = useState(false);
   const [resultTab, setResultTab] = useState<'certificate' | 'review'>('certificate');
 
+  // Certificate Payment Status
+  const [isCertificateUnlocked, setIsCertificateUnlocked] = useState(false);
+  const [showPaymentGate, setShowPaymentGate] = useState(false);
+
+  // Check if candidate already has paid for this quiz certificate in this browser session
+  const checkStoredPayment = (candName: string, quizTitle: string): boolean => {
+    try {
+      const paidKey = `fap_cert_paid_${candName.trim().toLowerCase()}_${quizTitle.trim().toLowerCase()}`;
+      return localStorage.getItem(paidKey) === 'true';
+    } catch {
+      return false;
+    }
+  };
+
   // When modal is reopened, reload stored candidate info and show candidate entry screen
   useEffect(() => {
     if (isOpen) {
@@ -87,8 +106,23 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       setCandidateError('');
       setQuizMode(mode);
       setResultTab('certificate');
+      setIsCertificateUnlocked(false);
+      setShowPaymentGate(false);
     }
   }, [isOpen, mode]);
+
+  // When quiz completes, check payment status
+  useEffect(() => {
+    if (isCompleted) {
+      const isAlreadyPaid = checkStoredPayment(candidateName, title);
+      const isPaymentRequired = paymentConfig ? paymentConfig.isPaymentRequired : true;
+      if (!isPaymentRequired || isAlreadyPaid) {
+        setIsCertificateUnlocked(true);
+      } else {
+        setIsCertificateUnlocked(false);
+      }
+    }
+  }, [isCompleted, candidateName, title, paymentConfig]);
 
   // Quiz timer starts ONLY after candidate fills Name & Email and clicks "Start Quiz Now"
   useEffect(() => {
@@ -227,7 +261,38 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const feeAmount = paymentConfig?.feeAmount ?? 200;
+  const isPaymentRequired = paymentConfig ? paymentConfig.isPaymentRequired : true;
+
+  const handlePaymentSuccess = (paymentRecord: {
+    transactionId: string;
+    senderNumber: string;
+    paidAmount: number;
+    paidAt: string;
+  }) => {
+    try {
+      const paidKey = `fap_cert_paid_${candidateName.trim().toLowerCase()}_${title.trim().toLowerCase()}`;
+      localStorage.setItem(paidKey, 'true');
+      localStorage.setItem(`${paidKey}_record`, JSON.stringify(paymentRecord));
+    } catch {}
+
+    setIsCertificateUnlocked(true);
+    setShowPaymentGate(false);
+
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
+  };
+
   const handleDownloadCertificate = () => {
+    if (isPaymentRequired && !isCertificateUnlocked) {
+      setResultTab('certificate');
+      setShowPaymentGate(true);
+      return;
+    }
+
     const scoreData = calculateScore();
     downloadCertificatePdf({
       candidateName: candidateName.trim(),
@@ -700,8 +765,34 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
                   {/* Tab 1: Certificate Preview & Download */}
                   {resultTab === 'certificate' && (
-                    <div className="pt-2">
-                      <CertificateCard data={certData} />
+                    <div className="pt-2 space-y-4">
+                      {/* Payment Gate: Displayed when certificate is locked or user requested payment */}
+                      {isPaymentRequired && (!isCertificateUnlocked || showPaymentGate) && (
+                        <div id="quiz-certificate-payment-section">
+                          <CertificatePaymentGate
+                            paymentConfig={paymentConfig}
+                            candidateName={candidateName}
+                            candidateEmail={candidateEmail}
+                            quizTitle={title}
+                            categoryName={categoryName}
+                            isUnlocked={isCertificateUnlocked}
+                            onPaymentSuccess={handlePaymentSuccess}
+                            onDirectDownload={handleDownloadCertificate}
+                          />
+                        </div>
+                      )}
+
+                      {/* Official Certificate Card Preview */}
+                      <CertificateCard
+                        data={certData}
+                        isLocked={isPaymentRequired && !isCertificateUnlocked}
+                        feeAmount={feeAmount}
+                        onUnlockRequest={() => {
+                          setShowPaymentGate(true);
+                          const el = document.getElementById('quiz-certificate-payment-section');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                      />
                     </div>
                   )}
 
@@ -799,13 +890,28 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                       <RotateCcw className="w-4 h-4" /> Retake Quiz
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={handleDownloadCertificate}
-                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-emerald-600/20 active:scale-95"
-                    >
-                      <Download className="w-4 h-4" /> Download PDF Certificate
-                    </button>
+                    {isPaymentRequired && !isCertificateUnlocked ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResultTab('certificate');
+                          setShowPaymentGate(true);
+                          const el = document.getElementById('quiz-certificate-payment-section');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 text-xs font-black flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer"
+                      >
+                        <Lock className="w-4 h-4" /> Pay RS {feeAmount} to Download Certificate
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleDownloadCertificate}
+                        className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-emerald-600/20 active:scale-95 cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" /> Download PDF Certificate
+                      </button>
+                    )}
                   </div>
                 </div>
               );

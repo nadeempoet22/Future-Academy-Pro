@@ -116,6 +116,16 @@ export interface AdConfig {
   customHeaderAdHtml?: string;
 }
 
+export interface CertificatePaymentConfig {
+  feeAmount: number;
+  currency: string;
+  accountTitle: string;
+  bankName: string;
+  accountNumber: string;
+  instructions: string;
+  isPaymentRequired: boolean;
+}
+
 export interface SiteSettings {
   siteName: string;
   tagline: string;
@@ -128,6 +138,7 @@ export interface SiteSettings {
   announcementText: string;
   isAnnouncementActive: boolean;
   adConfig: AdConfig;
+  certificatePayment?: CertificatePaymentConfig;
 }
 
 export interface SystemStats {

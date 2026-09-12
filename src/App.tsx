@@ -87,6 +87,10 @@ export default function App() {
             parsed.address = 'Agriculture Work Shop, Dadu, Sindh, Pakistan';
             updated = true;
           }
+          if (parsed && !parsed.certificatePayment) {
+            parsed.certificatePayment = initialSiteSettings.certificatePayment;
+            updated = true;
+          }
           if (updated) {
             localStorage.setItem('futureacademy_settings', JSON.stringify(parsed));
           }
@@ -895,6 +899,7 @@ export default function App() {
         categoryName={quizCategory}
         questions={quizMcqList}
         onQuizComplete={handleQuizComplete}
+        paymentConfig={settings.certificatePayment}
       />
 
       {/* AI Smart Search Modal */}

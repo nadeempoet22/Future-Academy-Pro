@@ -19,6 +19,15 @@ export const initialSiteSettings: SiteSettings = {
     inContentAdEnabled: true,
     stickyBottomAdEnabled: false,
     customHeaderAdHtml: ''
+  },
+  certificatePayment: {
+    feeAmount: 200,
+    currency: 'PKR',
+    accountTitle: 'Future Academy Pro / Engr Nadeem Ali',
+    bankName: 'NAYA PAY',
+    accountNumber: '03482640086',
+    instructions: 'Please send RS 200 to our official NAYA PAY account: 03482640086. After transferring, enter your Transaction ID (TID) or sender mobile number below to verify and instantly unlock your official verified certificate.',
+    isPaymentRequired: true
   }
 };
 

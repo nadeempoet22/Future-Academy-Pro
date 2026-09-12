@@ -4,16 +4,26 @@ import {
   Download,
   Printer,
   Award,
-  ShieldCheck
+  ShieldCheck,
+  Lock,
+  Sparkles
 } from 'lucide-react';
 import { PakistanFlagCircle } from './PakistanFlagCircle';
 
 interface CertificateCardProps {
   data: CertificateData;
   onClosePreview?: () => void;
+  isLocked?: boolean;
+  onUnlockRequest?: () => void;
+  feeAmount?: number;
 }
 
-export const CertificateCard: React.FC<CertificateCardProps> = ({ data }) => {
+export const CertificateCard: React.FC<CertificateCardProps> = ({
+  data,
+  isLocked = false,
+  onUnlockRequest,
+  feeAmount = 200
+}) => {
   const certificateRef = useRef<HTMLDivElement>(null);
   const certId = data.certificateId || `FAP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
   const issueDate = data.issueDate || new Date().toLocaleDateString('en-US', {
@@ -24,6 +34,10 @@ export const CertificateCard: React.FC<CertificateCardProps> = ({ data }) => {
   const { grade, remark } = getPerformanceGrade(data.scorePercentage);
 
   const handleDownload = () => {
+    if (isLocked) {
+      if (onUnlockRequest) onUnlockRequest();
+      return;
+    }
     downloadCertificatePdf({
       ...data,
       certificateId: certId,
@@ -32,55 +46,133 @@ export const CertificateCard: React.FC<CertificateCardProps> = ({ data }) => {
   };
 
   const handlePrint = () => {
+    if (isLocked) {
+      if (onUnlockRequest) onUnlockRequest();
+      return;
+    }
     window.print();
   };
 
   return (
     <div className="space-y-4">
       {/* Top Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 rounded-2xl">
+      <div className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-2xl border transition-all ${
+        isLocked
+          ? 'bg-amber-500/10 border-amber-500/30'
+          : 'bg-emerald-500/10 border-emerald-500/20'
+      }`}>
         <div className="flex items-center gap-2">
-          <Award className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          {isLocked ? (
+            <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          ) : (
+            <Award className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          )}
           <div>
-            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-none">
-              Official Future Academy Pro Certificate
-            </h4>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-none">
+                Official Future Academy Pro Certificate
+              </h4>
+              {isLocked ? (
+                <span className="text-[10px] font-extrabold uppercase bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                  Locked (RS {feeAmount})
+                </span>
+              ) : (
+                <span className="text-[10px] font-extrabold uppercase bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                  Verified & Unlocked
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Verified Digital Credential • Ready for download and printing
+              {isLocked
+                ? `Official watermark preview • Pay RS ${feeAmount} to download and print original PDF`
+                : 'Verified Digital Credential • Ready for download and printing'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5 shadow-sm"
-            title="Print Certificate"
-          >
-            <Printer className="w-3.5 h-3.5" /> Print
-          </button>
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
-          >
-            <Download className="w-3.5 h-3.5" /> Download PDF Certificate
-          </button>
+          {isLocked ? (
+            <button
+              type="button"
+              onClick={onUnlockRequest}
+              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-95 text-slate-950 font-black text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer"
+            >
+              <Lock className="w-3.5 h-3.5" /> Pay RS {feeAmount} to Download
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                title="Print Certificate"
+              >
+                <Printer className="w-3.5 h-3.5" /> Print
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" /> Download PDF Certificate
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Certificate Frame Preview */}
-      <div className="overflow-x-auto pb-2">
+      <div className="overflow-x-auto pb-2 relative">
+        {/* Certificate Card Content */}
         <div
           ref={certificateRef}
           id="futureacademy-official-certificate"
-          className="relative min-w-[720px] max-w-4xl mx-auto text-slate-900 p-8 sm:p-10 rounded-2xl shadow-2xl border-[6px] border-[#0a192f] select-none font-serif"
+          className="relative min-w-[720px] max-w-4xl mx-auto text-slate-900 p-8 sm:p-10 rounded-2xl shadow-2xl border-[6px] border-[#0a192f] select-none font-serif overflow-hidden"
           style={{
             backgroundColor: '#faf5ea',
             backgroundImage: 'radial-gradient(ellipse at 50% 45%, #fffdf8 0%, #faf4e6 50%, #f1e7d2 100%)'
           }}
         >
+          {/* Locked Watermark & Lock Notice Overlay */}
+          {isLocked && (
+            <div className="absolute inset-0 z-20 pointer-events-none flex flex-col items-center justify-center bg-slate-900/10 backdrop-blur-[0.7px]">
+              {/* Diagonal Watermark Stripes */}
+              <div
+                className="absolute inset-0 pointer-events-none opacity-20 rotate-[-25deg] flex flex-col justify-around scale-125"
+                style={{ select: 'none' }}
+              >
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="text-center whitespace-nowrap text-3xl sm:text-4xl font-sans font-black tracking-widest text-slate-900 uppercase">
+                    FUTURE ACADEMY PRO • OFFICIAL SAMPLE • PAID CREDENTIAL RS {feeAmount} •
+                  </div>
+                ))}
+              </div>
+
+              {/* Center Lock Badge */}
+              <div className="relative pointer-events-auto bg-slate-950/90 border-2 border-amber-500/80 rounded-2xl p-4 sm:p-5 text-center text-white shadow-2xl max-w-sm mx-4 space-y-2.5">
+                <div className="w-10 h-10 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center mx-auto shadow-lg">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-sans font-black text-sm text-amber-400">
+                    Official Certificate Locked
+                  </h4>
+                  <p className="font-sans text-xs text-slate-300 mt-1 leading-relaxed">
+                    Download watermark-free high-resolution PDF certificate with RS {feeAmount} fee payment.
+                  </p>
+                </div>
+                {onUnlockRequest && (
+                  <button
+                    type="button"
+                    onClick={onUnlockRequest}
+                    className="w-full bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-sans font-black text-xs py-2 px-3 rounded-xl transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" /> Pay RS {feeAmount} via NayaPay
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           {/* Subtle Security Guilloché Pattern Overlay */}
           <div
             className="absolute inset-0 pointer-events-none opacity-[0.035] rounded-xl"
