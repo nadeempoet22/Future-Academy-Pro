@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MCQ, Category, SiteSettings, UserProfile, BlogPost, QuizResult } from './types';
 import {
   initialSiteSettings,
@@ -33,7 +33,9 @@ import {
   Star,
   Users,
   Sun,
-  Moon
+  Moon,
+  Radio,
+  RefreshCw
 } from 'lucide-react';
 
 const checkIsAdminRoute = () => {
@@ -185,6 +187,12 @@ export default function App() {
   const [quizCategory, setQuizCategory] = useState('General');
   const [quizMcqList, setQuizMcqList] = useState<MCQ[]>([]);
   const [legalModalTitle, setLegalModalTitle] = useState<string | null>(null);
+
+  // Real-Time Cross-Device Synchronization State (Mobile, Laptop, PC)
+  const [syncVersion, setSyncVersion] = useState<number>(0);
+  const [isLiveSyncing, setIsLiveSyncing] = useState<boolean>(false);
+  const [syncNotice, setSyncNotice] = useState<{ title: string; detail: string } | null>(null);
+  const syncVersionRef = useRef<number>(0);
 
   // Apply dark mode class to html and body element and persist in localStorage
   useEffect(() => {
@@ -440,11 +448,101 @@ export default function App() {
     }
   };
 
+  // Fetch full set of MCQs to guarantee sync with offline cache & quizzes
+  const fetchAllMcqs = async () => {
+    try {
+      const res = await fetch(`/api/mcqs/all?t=${Date.now()}`);
+      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+        const data = await res.json();
+        if (data && Array.isArray(data.mcqs) && data.mcqs.length > 0) {
+          setAllLocalMcqs(data.mcqs);
+          localStorage.setItem('futureacademy_mcqs', JSON.stringify(data.mcqs));
+        }
+      }
+    } catch {
+      // Use local MCQs
+    }
+  };
+
+  // Real-Time Cross-Device Sync Engine: Checks server version and pulls updates immediately
+  const checkLiveSync = async (force: boolean = false) => {
+    try {
+      setIsLiveSyncing(true);
+      const res = await fetch(`/api/sync/status?t=${Date.now()}`);
+      if (!res.ok) return;
+      const status = await res.json();
+      if (!status || typeof status.version !== 'number') return;
+
+      const serverVer = status.version;
+      const currentVer = syncVersionRef.current;
+
+      // Initial check on page boot
+      if (currentVer === 0) {
+        syncVersionRef.current = serverVer;
+        setSyncVersion(serverVer);
+        fetchAllMcqs();
+        return;
+      }
+
+      // If server version increased or forced by user/admin
+      if (serverVer > currentVer || force) {
+        syncVersionRef.current = serverVer;
+        setSyncVersion(serverVer);
+
+        // Fetch fresh state across all systems
+        await Promise.all([
+          fetchSettings(),
+          fetchCategories(),
+          fetchMcqs(),
+          fetchAllMcqs(),
+          fetchBlogPosts()
+        ]);
+
+        const actionNote = status.lastAction || 'Admin ne website settings aur questions update kiye hain';
+        setSyncNotice({
+          title: '⚡ Real-Time Update Synced!',
+          detail: `${actionNote} (تمام ڈیوائسز: Mobile & PC پر اپڈیٹ ہوچکا ہے)`
+        });
+
+        setTimeout(() => {
+          setSyncNotice(null);
+        }, 5000);
+      }
+    } catch {
+      // Ignore transient network errors
+    } finally {
+      setIsLiveSyncing(false);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
     fetchCategories();
     fetchUserProfile();
     fetchBlogPosts();
+    fetchAllMcqs();
+    checkLiveSync(false);
+
+    // Heartbeat every 4 seconds: detects new questions or settings added by admin on any device
+    const syncInterval = setInterval(() => {
+      checkLiveSync(false);
+    }, 4000);
+
+    // Instant update when user switches back to browser or unlocks mobile screen
+    const onScreenActive = () => {
+      if (document.visibilityState === 'visible') {
+        checkLiveSync(false);
+      }
+    };
+
+    window.addEventListener('focus', onScreenActive);
+    document.addEventListener('visibilitychange', onScreenActive);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('focus', onScreenActive);
+      document.removeEventListener('visibilitychange', onScreenActive);
+    };
   }, []);
 
   useEffect(() => {
@@ -585,6 +683,8 @@ export default function App() {
         setDarkMode={setDarkMode}
         onOpenSearch={() => setShowSearchModal(true)}
         onOpenDailyQuiz={handleLaunchDailyQuiz}
+        isLiveSyncing={isLiveSyncing}
+        onForceSync={() => checkLiveSync(true)}
       />
 
       {/* Top Banner Ad Place */}
@@ -958,8 +1058,14 @@ export default function App() {
             mcqs={mcqs}
             initialCategoryForMcq={adminCategoryForAdd}
             onUpdateSettings={setSettings}
-            onRefreshMcqs={fetchMcqs}
-            onRefreshCategories={fetchCategories}
+            onRefreshMcqs={async () => {
+              await Promise.all([fetchMcqs(), fetchAllMcqs()]);
+              await checkLiveSync(true);
+            }}
+            onRefreshCategories={async () => {
+              await fetchCategories();
+              await checkLiveSync(true);
+            }}
             onExitAdmin={handleExitAdmin}
           />
         )}
@@ -1007,6 +1113,32 @@ export default function App() {
         onClose={() => setLegalModalTitle(null)}
         settings={settings}
       />
+
+      {/* Real-Time Cross-Device Synchronization Toast Alert */}
+      {syncNotice && (
+        <div
+          role="alert"
+          className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-50 max-w-sm sm:max-w-md bg-slate-900/95 text-white p-4 rounded-2xl shadow-2xl border border-emerald-500/50 backdrop-blur-md flex items-start gap-3 transition-all animate-bounce"
+        >
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0 mt-0.5">
+            <Radio className="w-4 h-4 animate-pulse" />
+          </div>
+          <div className="flex-1 pr-2">
+            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>{syncNotice.title}</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            </h4>
+            <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">{syncNotice.detail}</p>
+          </div>
+          <button
+            onClick={() => setSyncNotice(null)}
+            className="text-slate-400 hover:text-white text-xs font-bold p-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Mobile Sticky Quick Pagination Bar - Guaranteed visible on all mobile devices when viewing questions */}
       {activeTab === 'home' && totalPages > 1 && (

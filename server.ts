@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
@@ -17,7 +18,24 @@ import { findQuickFact } from './src/data/knowledgeBase.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// In-Memory Database Store
+// Persistent Database Directory & File
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'database.json');
+
+// Global Sync Metadata for cross-device updates (Mobile, Tablet, Desktop)
+interface SyncMeta {
+  version: number;
+  lastModified: number;
+  lastAction: string;
+}
+
+let syncMeta: SyncMeta = {
+  version: 1,
+  lastModified: Date.now(),
+  lastAction: 'System initialized'
+};
+
+// Database Store Variables
 let siteSettings: SiteSettings = JSON.parse(JSON.stringify(initialSiteSettings));
 let categories: Category[] = JSON.parse(JSON.stringify(initialCategories));
 let mcqs: MCQ[] = JSON.parse(JSON.stringify(initialMcqs));
@@ -36,6 +54,72 @@ let adminCredentials = {
   password: 'admin',
   updatedAt: new Date().toISOString()
 };
+
+// Save Database to Disk
+function saveDatabase() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const payload = {
+      syncMeta,
+      siteSettings,
+      categories,
+      mcqs,
+      blogPosts,
+      userProfile,
+      reports,
+      certificatePayments,
+      preapprovedTids: Array.from(preapprovedTids),
+      adminCredentials
+    };
+    fs.writeFileSync(DB_FILE, JSON.stringify(payload, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[Database Save Error]:', err);
+  }
+}
+
+// Load Database from Disk
+function loadDatabase() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.syncMeta) syncMeta = data.syncMeta;
+      if (data.siteSettings) siteSettings = data.siteSettings;
+      if (Array.isArray(data.categories) && data.categories.length > 0) categories = data.categories;
+      if (Array.isArray(data.mcqs) && data.mcqs.length > 0) {
+        // Merge missing initial seed MCQs to ensure base data is always intact
+        const existingIds = new Set(data.mcqs.map((m: MCQ) => m.id));
+        const missingSeeds = initialMcqs.filter(m => !existingIds.has(m.id));
+        mcqs = [...data.mcqs, ...missingSeeds];
+      }
+      if (Array.isArray(data.blogPosts) && data.blogPosts.length > 0) blogPosts = data.blogPosts;
+      if (data.userProfile) userProfile = data.userProfile;
+      if (Array.isArray(data.reports)) reports = data.reports;
+      if (Array.isArray(data.certificatePayments)) certificatePayments = data.certificatePayments;
+      if (Array.isArray(data.preapprovedTids)) preapprovedTids = new Set(data.preapprovedTids);
+      if (data.adminCredentials) adminCredentials = data.adminCredentials;
+      console.log(`[Database Loaded] ${mcqs.length} MCQs, ${categories.length} Categories, Sync Version: ${syncMeta.version}`);
+    } else {
+      saveDatabase();
+    }
+  } catch (err) {
+    console.error('[Database Load Error]:', err);
+  }
+}
+
+// Trigger Cross-Device Sync Notification & Persist Changes
+function triggerSyncUpdate(action: string) {
+  syncMeta.version = (syncMeta.version || 1) + 1;
+  syncMeta.lastModified = Date.now();
+  syncMeta.lastAction = action;
+  saveDatabase();
+  console.log(`[Cross-Device Sync Event] v${syncMeta.version}: ${action}`);
+}
+
+// Initial DB load
+loadDatabase();
 
 // Initialize Gemini Client Lazily/Safely on Server
 function getGeminiClient(): GoogleGenAI {
@@ -58,6 +142,52 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json({ limit: '10mb' }));
+
+  // Prevent browser caching of all API responses so all mobile and desktop devices always receive live fresh data
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+  });
+
+  // ===================================
+  // CROSS-DEVICE REAL-TIME SYNC API
+  // ===================================
+
+  // Ultra-lightweight endpoint polled by mobile phones, computers, and tablets
+  app.get('/api/sync/status', (req, res) => {
+    res.json({
+      version: syncMeta.version,
+      lastModified: syncMeta.lastModified,
+      lastAction: syncMeta.lastAction,
+      mcqsCount: mcqs.length,
+      categoriesCount: categories.length,
+      siteSettingsUpdatedAt: siteSettings.siteName,
+      timestamp: Date.now()
+    });
+  });
+
+  // Global Sync Endpoint: Returns all MCQs so any device can sync its full offline & quiz pool
+  app.get('/api/mcqs/all', (req, res) => {
+    res.json({
+      mcqs,
+      total: mcqs.length,
+      version: syncMeta.version,
+      lastModified: syncMeta.lastModified
+    });
+  });
+
+  // Admin Broadcast Trigger: Force-sync notification to all devices
+  app.post('/api/sync/broadcast', (req, res) => {
+    const { action } = req.body || {};
+    triggerSyncUpdate(action || 'Admin broadcasted website update');
+    res.json({
+      success: true,
+      version: syncMeta.version,
+      message: 'Global update broadcasted to all connected devices'
+    });
+  });
 
   // ===================================
   // REST API ENDPOINTS
@@ -121,6 +251,7 @@ async function startServer() {
       adminCredentials.password = newPassword.trim();
     }
     adminCredentials.updatedAt = new Date().toISOString();
+    triggerSyncUpdate('Admin credentials updated');
 
     return res.json({
       success: true,
@@ -139,6 +270,7 @@ async function startServer() {
 
   app.put('/api/settings', (req, res) => {
     siteSettings = { ...siteSettings, ...req.body };
+    triggerSyncUpdate('Site settings updated');
     res.json({ status: 'success', settings: siteSettings });
   });
 
@@ -273,6 +405,8 @@ async function startServer() {
       catObj.questionCount += 1;
     }
 
+    triggerSyncUpdate(`New MCQ added: ${newMcq.question.slice(0, 35)}`);
+
     res.status(201).json(newMcq);
   });
 
@@ -282,11 +416,13 @@ async function startServer() {
       return res.status(404).json({ error: 'MCQ not found' });
     }
     mcqs[idx] = { ...mcqs[idx], ...req.body };
+    triggerSyncUpdate(`MCQ updated: ${mcqs[idx].question.slice(0, 35)}`);
     res.json(mcqs[idx]);
   });
 
   app.delete('/api/mcqs/:id', (req, res) => {
     mcqs = mcqs.filter(m => m.id !== req.params.id);
+    triggerSyncUpdate('MCQ deleted');
     res.json({ status: 'success' });
   });
 
@@ -333,6 +469,7 @@ async function startServer() {
     };
 
     mcq.comments.push(newComment);
+    triggerSyncUpdate('New comment on MCQ');
     res.json(newComment);
   });
 
@@ -387,6 +524,10 @@ async function startServer() {
       }
     });
 
+    if (addedCount > 0) {
+      triggerSyncUpdate(`Bulk imported ${addedCount} MCQs`);
+    }
+
     res.json({
       message: `Successfully imported ${addedCount} MCQs into "${targetCategory || 'designated categories'}"!`,
       addedCount,
@@ -432,7 +573,25 @@ async function startServer() {
     };
 
     categories.push(newCat);
+    triggerSyncUpdate(`New category added: ${newCat.name}`);
     res.status(201).json(newCat);
+  });
+
+  app.put('/api/categories/:id', (req, res) => {
+    const idx = categories.findIndex(c => c.id === req.params.id || c.slug === req.params.id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+    categories[idx] = { ...categories[idx], ...req.body };
+    triggerSyncUpdate(`Category updated: ${categories[idx].name}`);
+    res.json(categories[idx]);
+  });
+
+  app.delete('/api/categories/:id', (req, res) => {
+    const toDel = categories.find(c => c.id === req.params.id || c.slug === req.params.id);
+    categories = categories.filter(c => c.id !== req.params.id && c.slug !== req.params.id);
+    triggerSyncUpdate(`Category deleted: ${toDel?.name || req.params.id}`);
+    res.json({ status: 'success' });
   });
 
   // 4. Quiz Generator & Submission
@@ -751,6 +910,7 @@ Output ONLY valid JSON array with format:
     };
 
     certificatePayments.unshift(newPayment);
+    triggerSyncUpdate('Certificate payment submitted');
 
     res.status(201).json({
       success: true,
@@ -816,6 +976,8 @@ Output ONLY valid JSON array with format:
       preapprovedTids.add(payment.transactionId);
     }
 
+    triggerSyncUpdate(`Payment status updated to ${status}`);
+
     res.json({ success: true, payment });
   });
 
@@ -853,6 +1015,7 @@ Output ONLY valid JSON array with format:
       return res.status(404).json({ error: 'Payment not found' });
     }
     certificatePayments.splice(idx, 1);
+    triggerSyncUpdate('Payment record removed');
     res.json({ success: true, message: 'Payment record removed' });
   });
 
@@ -886,6 +1049,7 @@ Output ONLY valid JSON array with format:
       if (backup.categories) categories = backup.categories;
       if (backup.mcqs) mcqs = backup.mcqs;
       if (backup.blogPosts) blogPosts = backup.blogPosts;
+      triggerSyncUpdate('Database restored from backup');
       res.json({ message: 'Database restored successfully!' });
     } else {
       res.status(400).json({ error: 'Invalid backup JSON file' });
