@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "mcqs": {
+      "collection": "mcqs",
+      "fields": {
+        "id": { "type": "string", "maxLength": 128 },
+        "question": { "type": "string", "maxLength": 5000 },
+        "options": { "type": "list", "maxCount": 10 },
+        "correctAnswer": { "type": "number" },
+        "explanation": { "type": "string", "maxLength": 5000 },
+        "category": { "type": "string", "maxLength": 100 },
+        "difficulty": { "type": "string", "maxLength": 50 },
+        "tags": { "type": "list", "maxCount": 20 },
+        "examTags": { "type": "list", "maxCount": 20 },
+        "urduTranslation": { "type": "string", "maxLength": 5000 },
+        "urduOptions": { "type": "list", "maxCount": 10 },
+        "likes": { "type": "number" },
+        "dislikes": { "type": "number" },
+        "reports": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 100 },
+        "updatedAt": { "type": "string", "maxLength": 100 }
+      }
+    },
+    "categories": {
+      "collection": "categories",
+      "fields": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 200 },
+        "slug": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "icon": { "type": "string", "maxLength": 100 },
+        "color": { "type": "string", "maxLength": 100 },
+        "questionCount": { "type": "number" }
+      }
+    },
+    "siteSettings": {
+      "collection": "siteSettings",
+      "fields": {
+        "siteName": { "type": "string", "maxLength": 200 },
+        "tagline": { "type": "string", "maxLength": 500 },
+        "announcement": { "type": "string", "maxLength": 1000 },
+        "showAnnouncement": { "type": "boolean" },
+        "contactEmail": { "type": "string", "maxLength": 200 },
+        "contactPhone": { "type": "string", "maxLength": 100 },
+        "maintenanceMode": { "type": "boolean" }
+      }
+    },
+    "certificate_payments": {
+      "collection": "certificate_payments",
+      "fields": {
+        "candidateName": { "type": "string", "maxLength": 200 },
+        "fatherName": { "type": "string", "maxLength": 200 },
+        "cnic": { "type": "string", "maxLength": 50 },
+        "quizTopic": { "type": "string", "maxLength": 200 },
+        "score": { "type": "string", "maxLength": 50 },
+        "percentage": { "type": "number" },
+        "transactionId": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "maxLength": 50 },
+        "submittedAt": { "type": "string", "maxLength": 100 }
+      }
+    }
+  }
+}

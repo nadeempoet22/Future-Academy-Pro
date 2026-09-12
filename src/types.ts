@@ -30,7 +30,9 @@ export interface MCQ {
   views: number;
   likes: number;
   dislikes: number;
+  reports?: number;
   createdAt: string;
+  updatedAt?: string;
   comments: Comment[];
   isFeatured?: boolean;
 }

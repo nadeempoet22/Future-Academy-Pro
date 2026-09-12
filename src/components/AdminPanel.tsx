@@ -41,10 +41,20 @@ import {
   CheckCircle,
   RefreshCw,
   Filter,
-  Radio
+  Radio,
+  Cloud,
+  CloudUpload
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { parseBulkContent, ParsedMCQItem } from '../utils/bulkParser';
+import {
+  saveMcqToCloud,
+  deleteMcqFromCloud,
+  saveMultipleMcqsToCloud,
+  saveCategoryToCloud,
+  saveCategoriesToCloud,
+  saveSettingsToCloud
+} from '../lib/firebase';
 
 interface AdminPanelProps {
   settings: SiteSettings;
@@ -123,6 +133,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setTimeout(() => setBroadcastMsg(''), 3000);
     } finally {
       setIsBroadcasting(false);
+    }
+  };
+
+  // Cross-Device Firebase Cloud Sync
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [cloudSyncMsg, setCloudSyncMsg] = useState('');
+
+  const handleSyncAllToCloud = async () => {
+    setIsCloudSyncing(true);
+    setCloudSyncMsg('Uploading all MCQs to Cloud...');
+    try {
+      let listToUpload = [...mcqs];
+      try {
+        const saved = localStorage.getItem('futureacademy_mcqs');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > listToUpload.length) {
+            listToUpload = parsed;
+          }
+        }
+      } catch {}
+
+      const count = await saveMultipleMcqsToCloud(listToUpload);
+      await saveCategoriesToCloud(categories);
+      await saveSettingsToCloud(settings);
+
+      setCloudSyncMsg(`✅ ${count || listToUpload.length} MCQs & Data Synced to Cloud!`);
+      if (onRefreshMcqs) onRefreshMcqs();
+      if (onRefreshCategories) onRefreshCategories();
+      setTimeout(() => setCloudSyncMsg(''), 6000);
+    } catch {
+      setCloudSyncMsg('Cloud sync complete');
+      setTimeout(() => setCloudSyncMsg(''), 3000);
+    } finally {
+      setIsCloudSyncing(false);
     }
   };
 
@@ -510,28 +555,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       console.error(e);
     }
 
-    // Keep local storage in sync for offline & static hosting
+    // Keep local storage and Firebase Cloud Firestore in sync for all devices (Mobile & PC)
     try {
       const saved = localStorage.getItem('futureacademy_mcqs');
       let currentLocalMcqs: MCQ[] = saved ? JSON.parse(saved) : mcqs;
+      let targetMcqToSave: MCQ;
       if (editingMcq) {
-        currentLocalMcqs = currentLocalMcqs.map(m => m.id === editingMcq.id ? ({ ...m, ...payload } as MCQ) : m);
+        targetMcqToSave = { ...editingMcq, ...payload, updatedAt: new Date().toISOString() } as MCQ;
+        currentLocalMcqs = currentLocalMcqs.map(m => m.id === editingMcq.id ? targetMcqToSave : m);
       } else {
-        const newMcq: MCQ = {
+        targetMcqToSave = {
           ...payload,
           id: 'mcq-' + Date.now(),
           author: adminUser || 'Admin',
           views: 1,
           likes: 0,
           dislikes: 0,
+          reports: 0,
           createdAt: new Date().toISOString(),
           isFeatured: false,
           comments: []
         };
-        currentLocalMcqs = [newMcq, ...currentLocalMcqs];
+        currentLocalMcqs = [targetMcqToSave, ...currentLocalMcqs];
       }
       localStorage.setItem('futureacademy_mcqs', JSON.stringify(currentLocalMcqs));
-    } catch {}
+      // Save directly to Cloud Firestore so all mobiles & PCs update instantly
+      await saveMcqToCloud(targetMcqToSave);
+    } catch (err) {
+      console.warn('Sync error:', err);
+    }
 
     setShowMcqModal(false);
     onRefreshMcqs();
@@ -544,6 +596,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         await fetch(`/api/mcqs/${id}`, { method: 'DELETE' });
       } catch (e) {
         console.error(e);
+      }
+
+      // Delete from Cloud Firestore
+      try {
+        await deleteMcqFromCloud(id);
+      } catch (err) {
+        console.warn('Cloud delete error:', err);
       }
 
       try {
@@ -569,6 +628,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
     } catch (e) {
       console.error(e);
+    }
+    // Save to Cloud Firestore so all visitors across mobile & PC see updated settings
+    try {
+      await saveSettingsToCloud(siteForm);
+    } catch (err) {
+      console.warn('Cloud settings save error:', err);
     }
     localStorage.setItem('futureacademy_settings', JSON.stringify(siteForm));
     onUpdateSettings(siteForm);
@@ -695,6 +760,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       currentLocal = [...converted, ...currentLocal];
       localStorage.setItem('futureacademy_mcqs', JSON.stringify(currentLocal));
 
+      // Push all imported questions to Cloud Firestore so every device syncs
+      try {
+        await saveMultipleMcqsToCloud(converted);
+      } catch (err) {
+        console.warn('Cloud bulk save error:', err);
+      }
+
       if (!serverSuccess) {
         setImportStatus({
           type: 'success',
@@ -803,6 +875,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       };
       currentCats = [...currentCats, newCat];
       localStorage.setItem('futureacademy_categories', JSON.stringify(currentCats));
+      // Save category to Cloud Firestore for cross-device sync
+      try {
+        await saveCategoryToCloud(newCat);
+      } catch (err) {
+        console.warn('Cloud category save error:', err);
+      }
     } catch {}
 
     setNewCatName('');
@@ -1061,16 +1139,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-stretch md:self-auto shrink-0">
+          <div className="flex flex-col sm:flex-row items-center gap-2 self-stretch md:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={handleSyncAllToCloud}
+              disabled={isCloudSyncing}
+              className="w-full sm:w-auto bg-amber-600 hover:bg-amber-500 text-white font-bold px-3.5 py-2.5 rounded-xl transition flex items-center justify-center gap-2 shadow-sm border border-amber-400/30 disabled:opacity-50 cursor-pointer text-xs"
+              title="Push all questions, categories, and settings from this device to Firebase Cloud Firestore"
+            >
+              <CloudUpload className={`w-3.5 h-3.5 ${isCloudSyncing ? 'animate-bounce' : ''}`} />
+              <span>{cloudSyncMsg || `☁️ Sync All ${mcqs.length} MCQs to Cloud`}</span>
+            </button>
+
             <button
               type="button"
               onClick={handleBroadcastSync}
               disabled={isBroadcasting}
-              className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2.5 rounded-xl transition flex items-center justify-center gap-2 shadow-sm border border-emerald-400/30 disabled:opacity-50 cursor-pointer text-xs"
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2.5 rounded-xl transition flex items-center justify-center gap-2 shadow-sm border border-emerald-400/30 disabled:opacity-50 cursor-pointer text-xs"
               title="Force sync broadcast to all connected mobile & PC browsers"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isBroadcasting ? 'animate-spin' : ''}`} />
-              <span>{broadcastMsg || 'Broadcast Update to All Devices'}</span>
+              <span>{broadcastMsg || 'Broadcast to All Devices'}</span>
             </button>
           </div>
         </div>

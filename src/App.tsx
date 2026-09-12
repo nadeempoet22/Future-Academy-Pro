@@ -7,6 +7,12 @@ import {
   initialUserProfile,
   initialBlogPosts
 } from './data/seedData';
+import {
+  subscribeToCloudMcqs,
+  saveMultipleMcqsToCloud,
+  subscribeToCloudCategories,
+  subscribeToCloudSettings
+} from './lib/firebase';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { AdBanner } from './components/AdBanner';
@@ -320,7 +326,7 @@ export default function App() {
       const res = await fetch(`/api/mcqs?${params.toString()}`);
       if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
         const data = await res.json();
-        if (data && Array.isArray(data.mcqs)) {
+        if (data && Array.isArray(data.mcqs) && (data.total >= allLocalMcqs.length || !allLocalMcqs.length)) {
           setMcqs(data.mcqs);
           setTotalPages(data.totalPages || 1);
           setTotalMcqsCount(data.total || data.mcqs.length);
@@ -523,6 +529,60 @@ export default function App() {
     fetchAllMcqs();
     checkLiveSync(false);
 
+    // 1. Subscribe to real-time Cloud Firestore MCQs across all devices (Mobile & PC)
+    const unsubCloudMcqs = subscribeToCloudMcqs(async (cloudList) => {
+      if (cloudList && cloudList.length > 0) {
+        let localSaved: MCQ[] = [];
+        try {
+          const raw = localStorage.getItem('futureacademy_mcqs');
+          if (raw) localSaved = JSON.parse(raw);
+        } catch {}
+
+        const cloudIdSet = new Set(cloudList.map(m => m.id));
+        const missingInCloud = localSaved.filter(m => !cloudIdSet.has(m.id));
+
+        if (missingInCloud.length > 0) {
+          // Push any locally created questions (e.g. 50 new questions added by admin) to Cloud Firestore
+          await saveMultipleMcqsToCloud(missingInCloud);
+          const combined = [...missingInCloud, ...cloudList];
+          setAllLocalMcqs(combined);
+          localStorage.setItem('futureacademy_mcqs', JSON.stringify(combined));
+        } else {
+          setAllLocalMcqs(cloudList);
+          localStorage.setItem('futureacademy_mcqs', JSON.stringify(cloudList));
+        }
+      } else {
+        // First-time Cloud Firestore seeding: upload all local MCQs to Cloud so all devices get them
+        let toSeed = allLocalMcqs.length > 0 ? allLocalMcqs : initialMcqs;
+        try {
+          const raw = localStorage.getItem('futureacademy_mcqs');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > toSeed.length) toSeed = parsed;
+          }
+        } catch {}
+        if (toSeed.length > 0) {
+          await saveMultipleMcqsToCloud(toSeed);
+        }
+      }
+    });
+
+    // 2. Subscribe to real-time Cloud Categories
+    const unsubCloudCats = subscribeToCloudCategories((cloudCats) => {
+      if (cloudCats && cloudCats.length > 0) {
+        setCategories(cloudCats);
+        localStorage.setItem('futureacademy_categories', JSON.stringify(cloudCats));
+      }
+    });
+
+    // 3. Subscribe to real-time Cloud Site Settings
+    const unsubCloudSettings = subscribeToCloudSettings((cloudSettings) => {
+      if (cloudSettings) {
+        setSettings(cloudSettings);
+        localStorage.setItem('futureacademy_site_settings', JSON.stringify(cloudSettings));
+      }
+    });
+
     // Heartbeat every 4 seconds: detects new questions or settings added by admin on any device
     const syncInterval = setInterval(() => {
       checkLiveSync(false);
@@ -539,6 +599,9 @@ export default function App() {
     document.addEventListener('visibilitychange', onScreenActive);
 
     return () => {
+      unsubCloudMcqs();
+      unsubCloudCats();
+      unsubCloudSettings();
       clearInterval(syncInterval);
       window.removeEventListener('focus', onScreenActive);
       document.removeEventListener('visibilitychange', onScreenActive);
@@ -547,7 +610,7 @@ export default function App() {
 
   useEffect(() => {
     fetchMcqs();
-  }, [selectedCategory, difficultyFilter, sortBy, currentPage, searchQuery]);
+  }, [selectedCategory, difficultyFilter, sortBy, currentPage, searchQuery, allLocalMcqs]);
 
   const handlePageChange = (newPage: number) => {
     const targetPage = Math.max(1, Math.min(totalPages, newPage));
@@ -1055,7 +1118,7 @@ export default function App() {
           <AdminPanel
             settings={settings}
             categories={categories}
-            mcqs={mcqs}
+            mcqs={allLocalMcqs}
             initialCategoryForMcq={adminCategoryForAdd}
             onUpdateSettings={setSettings}
             onRefreshMcqs={async () => {
