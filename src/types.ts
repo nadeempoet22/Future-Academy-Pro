@@ -126,6 +126,24 @@ export interface CertificatePaymentConfig {
   isPaymentRequired: boolean;
 }
 
+export interface CertificatePaymentSubmission {
+  id: string;
+  candidateName: string;
+  candidateEmail?: string;
+  quizTitle: string;
+  categoryName?: string;
+  amount: number;
+  currency: string;
+  bankName: string;
+  accountNumber: string;
+  senderNumber: string;
+  transactionId: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
+  reviewedAt?: string;
+  adminNote?: string;
+}
+
 export interface SiteSettings {
   siteName: string;
   tagline: string;

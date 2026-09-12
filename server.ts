@@ -10,7 +10,7 @@ import {
   initialBlogPosts,
   initialUserProfile
 } from './src/data/seedData.js';
-import { MCQ, Category, BlogPost, SiteSettings, UserProfile, QuizResult, Comment } from './src/types.js';
+import { MCQ, Category, BlogPost, SiteSettings, UserProfile, QuizResult, Comment, CertificatePaymentSubmission } from './src/types.js';
 import { resolveCorrectAnswer } from './src/utils/bulkParser.js';
 import { findQuickFact } from './src/data/knowledgeBase.js';
 
@@ -24,6 +24,10 @@ let mcqs: MCQ[] = JSON.parse(JSON.stringify(initialMcqs));
 let blogPosts: BlogPost[] = JSON.parse(JSON.stringify(initialBlogPosts));
 let userProfile: UserProfile = JSON.parse(JSON.stringify(initialUserProfile));
 let reports: { id: string; mcqId: string; reason: string; createdAt: string }[] = [];
+
+// Certificate Payments Store
+let certificatePayments: CertificatePaymentSubmission[] = [];
+let preapprovedTids: Set<string> = new Set<string>();
 
 // Admin Authentication Store (Default credentials: admin / admin)
 let adminCredentials = {
@@ -674,6 +678,182 @@ Output ONLY valid JSON array with format:
       console.error('Gemini AI Generate Quiz Error:', err);
       res.status(500).json({ error: err.message || 'Failed to generate AI quiz' });
     }
+  });
+
+  // ==========================================
+  // CERTIFICATE PAYMENT & REAL VERIFICATION API
+  // ==========================================
+  app.post('/api/certificate-payments/submit', (req, res) => {
+    const {
+      candidateName,
+      candidateEmail,
+      quizTitle,
+      categoryName,
+      senderNumber,
+      transactionId,
+      amount
+    } = req.body;
+
+    if (!candidateName || !quizTitle) {
+      return res.status(400).json({ error: 'Candidate name aur Quiz title zaroori hain.' });
+    }
+
+    const cleanTid = (transactionId || '').toString().trim().toUpperCase();
+    const cleanSender = (senderNumber || '').toString().replace(/\s+/g, '');
+    const cleanDigits = cleanSender.replace(/\D/g, '');
+
+    // Strict validation against fake/trivial data
+    if (!cleanTid || cleanTid.length < 6) {
+      return res.status(400).json({
+        error: 'Baraye meharbani kam az kam 6-12 huroof par mushtamil durust Transaction ID (TID) darj karein jo NayaPay SMS receipt mein mili ho.'
+      });
+    }
+
+    const invalidPatterns = [
+      '123456', '000000', '111111', '222222', '333333', '444444', '555555',
+      '666666', '777777', '888888', '999999', '1234567', 'TEST', 'FAKE',
+      'WRONG', 'NAYAPAY', 'PAYMENT', 'DEMO', 'DUMMY', 'ASDF', 'QWERTY', 'ABCDEF'
+    ];
+    if (invalidPatterns.some(p => cleanTid.includes(p)) || /^(\w)\1+$/.test(cleanTid)) {
+      return res.status(400).json({
+        error: 'Yeh Transaction ID na-manzoor hai. Baraye meharbani apni NayaPay app SMS se asli Transaction ID darj karein.'
+      });
+    }
+
+    if (cleanDigits.length < 10 || !cleanSender.startsWith('03')) {
+      return res.status(400).json({
+        error: 'Baraye meharbani durust 11-digit Pakistani mobile number darj karein (e.g. 03482640086).'
+      });
+    }
+
+    // Determine initial status: If TID is pre-approved by Admin, approve instantly!
+    const isPreApproved = preapprovedTids.has(cleanTid);
+    const existingApproved = certificatePayments.find(p => p.transactionId === cleanTid && p.status === 'approved');
+
+    const status: 'pending' | 'approved' | 'rejected' = (isPreApproved || !!existingApproved) ? 'approved' : 'pending';
+
+    const newPayment: CertificatePaymentSubmission = {
+      id: `cp-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+      candidateName: candidateName.trim(),
+      candidateEmail: candidateEmail?.trim() || '',
+      quizTitle: quizTitle.trim(),
+      categoryName: categoryName || 'General',
+      amount: amount || siteSettings.certificatePayment?.feeAmount || 200,
+      currency: siteSettings.certificatePayment?.currency || 'PKR',
+      bankName: siteSettings.certificatePayment?.bankName || 'NAYA PAY',
+      accountNumber: siteSettings.certificatePayment?.accountNumber || '03482640086',
+      senderNumber: cleanSender,
+      transactionId: cleanTid,
+      status,
+      submittedAt: new Date().toISOString(),
+      reviewedAt: status === 'approved' ? new Date().toISOString() : undefined,
+      adminNote: status === 'approved' ? 'Pre-authorized TID auto-approved' : undefined
+    };
+
+    certificatePayments.unshift(newPayment);
+
+    res.status(201).json({
+      success: true,
+      status: newPayment.status,
+      payment: newPayment,
+      message: status === 'approved'
+        ? 'Payment verified and certificate unlocked!'
+        : 'Payment received! Admin verification is in progress.'
+    });
+  });
+
+  app.get('/api/certificate-payments/check', (req, res) => {
+    const { transactionId, candidateName, quizTitle } = req.query;
+    const cleanTid = (transactionId || '').toString().trim().toUpperCase();
+
+    // Check if preapproved
+    if (cleanTid && preapprovedTids.has(cleanTid)) {
+      return res.json({ exists: true, status: 'approved' });
+    }
+
+    const record = certificatePayments.find(p => {
+      if (cleanTid && p.transactionId === cleanTid) return true;
+      if (candidateName && quizTitle &&
+          p.candidateName.toLowerCase() === String(candidateName).toLowerCase() &&
+          p.quizTitle.toLowerCase() === String(quizTitle).toLowerCase()) {
+        return true;
+      }
+      return false;
+    });
+
+    if (!record) {
+      return res.json({ exists: false, status: 'not_found' });
+    }
+
+    res.json({ exists: true, status: record.status, payment: record });
+  });
+
+  // Admin Endpoints for Certificate Payments
+  app.get('/api/admin/certificate-payments', (req, res) => {
+    res.json({
+      payments: certificatePayments,
+      preapprovedTids: Array.from(preapprovedTids)
+    });
+  });
+
+  app.put('/api/admin/certificate-payments/:id/status', (req, res) => {
+    const { status, adminNote } = req.body;
+    const payment = certificatePayments.find(p => p.id === req.params.id);
+
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment record not found' });
+    }
+
+    if (!['pending', 'approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    payment.status = status;
+    payment.reviewedAt = new Date().toISOString();
+    if (adminNote !== undefined) payment.adminNote = adminNote;
+
+    if (status === 'approved') {
+      preapprovedTids.add(payment.transactionId);
+    }
+
+    res.json({ success: true, payment });
+  });
+
+  app.post('/api/admin/certificate-payments/preapprove', (req, res) => {
+    const { transactionId } = req.body;
+    if (!transactionId || transactionId.trim().length < 4) {
+      return res.status(400).json({ error: 'Valid transaction ID required' });
+    }
+
+    const cleanTid = transactionId.trim().toUpperCase();
+    preapprovedTids.add(cleanTid);
+
+    // Also auto-approve any existing pending records with this TID
+    let updatedCount = 0;
+    certificatePayments.forEach(p => {
+      if (p.transactionId === cleanTid && p.status !== 'approved') {
+        p.status = 'approved';
+        p.reviewedAt = new Date().toISOString();
+        p.adminNote = 'Authorized by Admin via Pre-Approved TID';
+        updatedCount++;
+      }
+    });
+
+    res.json({
+      success: true,
+      transactionId: cleanTid,
+      updatedPendingRecords: updatedCount,
+      message: `TID ${cleanTid} added to pre-approved list!`
+    });
+  });
+
+  app.delete('/api/admin/certificate-payments/:id', (req, res) => {
+    const idx = certificatePayments.findIndex(p => p.id === req.params.id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+    certificatePayments.splice(idx, 1);
+    res.json({ success: true, message: 'Payment record removed' });
   });
 
   // 7. Blog Section API

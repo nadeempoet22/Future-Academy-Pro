@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MCQ, Category, SiteSettings, Option } from '../types';
+import { MCQ, Category, SiteSettings, Option, CertificatePaymentSubmission } from '../types';
 import {
   ShieldCheck,
   Plus,
@@ -34,7 +34,13 @@ import {
   LogOut,
   User,
   Mail,
-  CreditCard
+  CreditCard,
+  Clock,
+  XCircle,
+  MessageCircle,
+  CheckCircle,
+  RefreshCw,
+  Filter
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { parseBulkContent, ParsedMCQItem } from '../utils/bulkParser';
@@ -60,7 +66,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onRefreshCategories,
   onExitAdmin
 }) => {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'mcqs' | 'import' | 'categories' | 'ads' | 'security' | 'settings' | 'backup'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'mcqs' | 'payments' | 'import' | 'categories' | 'ads' | 'security' | 'settings' | 'backup'>('analytics');
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Admin Login Authentication State
@@ -82,6 +88,96 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
     return 'admin@futureacademypro.com';
   });
+
+  // Certificate Payments Management State
+  const [payments, setPayments] = useState<CertificatePaymentSubmission[]>([]);
+  const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [paymentSearch, setPaymentSearch] = useState('');
+  const [preapproveTidInput, setPreapproveTidInput] = useState('');
+  const [preapproveNoteInput, setPreapproveNoteInput] = useState('');
+  const [preapproveMsg, setPreapproveMsg] = useState('');
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  const fetchPayments = async () => {
+    setIsLoadingPayments(true);
+    try {
+      const res = await fetch('/api/admin/certificate-payments');
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.payments || []);
+        setPayments(list);
+      }
+    } catch (err) {
+      console.error('Failed to load payments:', err);
+    } finally {
+      setIsLoadingPayments(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdminLoggedIn) {
+      fetchPayments();
+      const interval = setInterval(fetchPayments, 8000);
+      return () => clearInterval(interval);
+    }
+  }, [isAdminLoggedIn]);
+
+  const handleUpdatePaymentStatus = async (paymentId: string, status: 'approved' | 'rejected') => {
+    setActionLoadingId(paymentId);
+    try {
+      const res = await fetch(`/api/admin/certificate-payments/${paymentId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        const resJson = await res.json();
+        const updated = resJson.payment || resJson;
+        setPayments(prev => prev.map(p => p.id === paymentId ? updated : p));
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handlePreapproveTid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!preapproveTidInput.trim()) return;
+    try {
+      const res = await fetch('/api/admin/certificate-payments/preapprove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: preapproveTidInput.trim(),
+          candidateName: preapproveNoteInput.trim() || 'Pre-approved Student'
+        })
+      });
+      if (res.ok) {
+        setPreapproveMsg(`Transaction ID "${preapproveTidInput.trim().toUpperCase()}" pre-approved successfully!`);
+        setPreapproveTidInput('');
+        setPreapproveNoteInput('');
+        fetchPayments();
+        setTimeout(() => setPreapproveMsg(''), 4000);
+      }
+    } catch (err) {
+      console.error('Error pre-approving TID:', err);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm('Are you sure you want to delete this payment submission?')) return;
+    try {
+      const res = await fetch(`/api/admin/certificate-payments/${paymentId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setPayments(prev => prev.filter(p => p.id !== paymentId));
+      }
+    } catch (err) {
+      console.error('Error deleting payment:', err);
+    }
+  };
 
   // Login Form States
   const [loginUsername, setLoginUsername] = useState('');
@@ -975,6 +1071,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Megaphone className="w-4 h-4" /> AdSense Ads
+        </button>
+
+        <button
+          onClick={() => setActiveTab('payments')}
+          className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+            activeTab === 'payments'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" /> Certificate Payments
+          {payments.filter(p => p.status === 'pending').length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950 animate-pulse">
+              {payments.filter(p => p.status === 'pending').length}
+            </span>
+          )}
         </button>
 
         <button
@@ -2041,6 +2153,337 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </p>
             )}
           </form>
+        </div>
+      )}
+
+      {/* Tab: Certificate Payments Management */}
+      {activeTab === 'payments' && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  Certificate Payments & NayaPay Verification
+                </h3>
+                <span className="text-[11px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  Receiver: NayaPay Only
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Verify real RS 200 transfers received on NayaPay (<strong>03482640086</strong>) before unlocking student certificates.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchPayments}
+              disabled={isLoadingPayments}
+              className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2 transition cursor-pointer self-start sm:self-auto disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingPayments ? 'animate-spin' : ''}`} />
+              <span>{isLoadingPayments ? 'Refreshing...' : 'Refresh Payments'}</span>
+            </button>
+          </div>
+
+          {/* 4 Stat Overview Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Submissions</span>
+              <span className="text-2xl font-black text-slate-900 dark:text-white mt-1 block">
+                {payments.length}
+              </span>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Pending Review</span>
+                {payments.filter(p => p.status === 'pending').length > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                )}
+              </div>
+              <span className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 block">
+                {payments.filter(p => p.status === 'pending').length}
+              </span>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5">
+              <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 block">Approved & Unlocked</span>
+              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
+                {payments.filter(p => p.status === 'approved').length}
+              </span>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-rose-500/30 bg-rose-500/5">
+              <span className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 block">Rejected / Fake</span>
+              <span className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1 block">
+                {payments.filter(p => p.status === 'rejected').length}
+              </span>
+            </div>
+          </div>
+
+          {/* Quick Pre-Authorize TID Card */}
+          <div className="bg-gradient-to-r from-emerald-500/10 via-slate-50 to-amber-500/10 dark:from-slate-800 dark:via-slate-800 dark:to-slate-800 border-2 border-emerald-500/30 rounded-2xl p-4 sm:p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                Pre-Authorize NayaPay Transaction ID (Instant Approval)
+              </h4>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Agar kisi student ne WhatsApp par RS 200 ki receipt send ki hai, to unka TID yahan pehle se approve kar dein. Jab student quiz mein yeh TID likhega to foran certificate unlock ho jayega!
+            </p>
+
+            <form onSubmit={handlePreapproveTid} className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <input
+                type="text"
+                required
+                value={preapproveTidInput}
+                onChange={e => setPreapproveTidInput(e.target.value.toUpperCase())}
+                placeholder="Transaction ID (e.g. NP49821948)"
+                className="flex-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono font-bold text-slate-900 dark:text-white uppercase outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <input
+                type="text"
+                value={preapproveNoteInput}
+                onChange={e => setPreapproveNoteInput(e.target.value)}
+                placeholder="Student Name / WhatsApp Note (Optional)"
+                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer shrink-0"
+              >
+                <Check className="w-4 h-4" /> Pre-Approve TID
+              </button>
+            </form>
+
+            {preapproveMsg && (
+              <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 animate-fade-in flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> {preapproveMsg}
+              </p>
+            )}
+          </div>
+
+          {/* Filter & Search Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setPaymentFilter('all')}
+                className={`px-3 py-1.5 rounded-xl transition ${
+                  paymentFilter === 'all'
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                All ({payments.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentFilter('pending')}
+                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1 ${
+                  paymentFilter === 'pending'
+                    ? 'bg-amber-500 text-slate-950 font-black'
+                    : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10'
+                }`}
+              >
+                <Clock className="w-3 h-3" /> Pending ({payments.filter(p => p.status === 'pending').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentFilter('approved')}
+                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1 ${
+                  paymentFilter === 'approved'
+                    ? 'bg-emerald-600 text-white font-black'
+                    : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
+                }`}
+              >
+                <CheckCircle2 className="w-3 h-3" /> Approved ({payments.filter(p => p.status === 'approved').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentFilter('rejected')}
+                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1 ${
+                  paymentFilter === 'rejected'
+                    ? 'bg-rose-600 text-white font-black'
+                    : 'text-rose-600 dark:text-rose-400 hover:bg-rose-500/10'
+                }`}
+              >
+                <XCircle className="w-3 h-3" /> Rejected ({payments.filter(p => p.status === 'rejected').length})
+              </button>
+            </div>
+
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={paymentSearch}
+                onChange={e => setPaymentSearch(e.target.value)}
+                placeholder="Search candidate, TID, mobile..."
+                className="w-full sm:w-64 pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+
+          {/* Submissions List */}
+          <div className="space-y-3">
+            {payments
+              .filter(p => {
+                if (paymentFilter !== 'all' && p.status !== paymentFilter) return false;
+                if (paymentSearch.trim()) {
+                  const q = paymentSearch.toLowerCase();
+                  return (
+                    p.candidateName.toLowerCase().includes(q) ||
+                    p.transactionId.toLowerCase().includes(q) ||
+                    p.senderNumber.toLowerCase().includes(q) ||
+                    p.quizTitle.toLowerCase().includes(q)
+                  );
+                }
+                return true;
+              })
+              .map(payment => {
+                const isApproved = payment.status === 'approved';
+                const isRejected = payment.status === 'rejected';
+                const isPending = payment.status === 'pending';
+                const cleanPhone = payment.senderNumber.replace(/\D/g, '');
+                const waPhone = cleanPhone.startsWith('0') ? '92' + cleanPhone.slice(1) : (cleanPhone.startsWith('92') ? cleanPhone : '92' + cleanPhone);
+                const waMsg = encodeURIComponent(
+                  `Assalam-o-Alaikum ${payment.candidateName}! Future Academy Pro regarding your RS 200 NayaPay payment (TID: ${payment.transactionId}) for "${payment.quizTitle}": Status is ${payment.status.toUpperCase()}.`
+                );
+
+                return (
+                  <div
+                    key={payment.id}
+                    className={`bg-white dark:bg-slate-900 rounded-2xl border p-4 sm:p-5 transition-all shadow-sm ${
+                      isPending
+                        ? 'border-amber-500/50 dark:border-amber-500/40 shadow-amber-500/5'
+                        : isApproved
+                        ? 'border-emerald-500/40 dark:border-emerald-500/30'
+                        : 'border-slate-200 dark:border-slate-800 opacity-75'
+                    }`}
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      {/* Left: Details */}
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                            {payment.candidateName}
+                          </h4>
+                          {payment.candidateEmail && (
+                            <span className="text-xs text-slate-400">
+                              ({payment.candidateEmail})
+                            </span>
+                          )}
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                              isApproved
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                : isPending
+                                ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 animate-pulse'
+                                : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                            }`}
+                          >
+                            {payment.status}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Transaction ID</span>
+                            <span className="font-mono font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                              {payment.transactionId}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Sender Mobile</span>
+                            <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                              {payment.senderNumber}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Fee Amount</span>
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                              RS {payment.amount} PKR
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Date & Time</span>
+                            <span className="text-slate-600 dark:text-slate-400 text-[11px]">
+                              {new Date(payment.submittedAt).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                          <span>Quiz:</span>
+                          <strong className="text-slate-700 dark:text-slate-300">{payment.quizTitle}</strong>
+                          {payment.categoryName && <span>({payment.categoryName})</span>}
+                        </div>
+                      </div>
+
+                      {/* Right: Actions */}
+                      <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
+                        {/* Approve Button */}
+                        {payment.status !== 'approved' && (
+                          <button
+                            type="button"
+                            disabled={actionLoadingId === payment.id}
+                            onClick={() => handleUpdatePaymentStatus(payment.id, 'approved')}
+                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Approve & Unlock
+                          </button>
+                        )}
+
+                        {/* Reject Button */}
+                        {payment.status !== 'rejected' && (
+                          <button
+                            type="button"
+                            disabled={actionLoadingId === payment.id}
+                            onClick={() => handleUpdatePaymentStatus(payment.id, 'rejected')}
+                            className="px-3 py-2 rounded-xl border border-rose-300 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <XCircle className="w-3.5 h-3.5" /> Reject
+                          </button>
+                        )}
+
+                        {/* WhatsApp Student */}
+                        <a
+                          href={`https://wa.me/${waPhone}?text=${waMsg}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs transition flex items-center gap-1.5 border border-emerald-500/30"
+                          title="Contact Student on WhatsApp"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                        </a>
+
+                        {/* Delete record */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePayment(payment.id)}
+                          className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                          title="Delete submission"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+            {payments.length === 0 && (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 p-8 text-center text-slate-400 text-xs">
+                Abhi tak koi certificate payment submission nahi aayi. Jab koi candidate RS 200 transfer karke TID enter karega to yahan show hogi.
+              </div>
+            )}
+          </div>
         </div>
       )}
 

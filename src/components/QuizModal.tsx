@@ -78,17 +78,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [isCertificateUnlocked, setIsCertificateUnlocked] = useState(false);
   const [showPaymentGate, setShowPaymentGate] = useState(false);
 
-  // Check if candidate already has paid for this quiz certificate in this browser session
-  const checkStoredPayment = (candName: string, quizTitle: string): boolean => {
-    try {
-      const paidKey = `fap_cert_paid_${candName.trim().toLowerCase()}_${quizTitle.trim().toLowerCase()}`;
-      return localStorage.getItem(paidKey) === 'true';
-    } catch {
-      return false;
-    }
-  };
-
-  // When modal is reopened, reload stored candidate info and show candidate entry screen
+  // When modal is reopened, reload stored candidate info and reset state
   useEffect(() => {
     if (isOpen) {
       try {
@@ -111,18 +101,18 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     }
   }, [isOpen, mode]);
 
-  // When quiz completes, check payment status
+  // When quiz completes, certificate stays LOCKED by default until fee is paid and verified
   useEffect(() => {
     if (isCompleted) {
-      const isAlreadyPaid = checkStoredPayment(candidateName, title);
       const isPaymentRequired = paymentConfig ? paymentConfig.isPaymentRequired : true;
-      if (!isPaymentRequired || isAlreadyPaid) {
+      // Real payment of RS 200 via NayaPay with valid TID is mandatory
+      if (!isPaymentRequired) {
         setIsCertificateUnlocked(true);
       } else {
         setIsCertificateUnlocked(false);
       }
     }
-  }, [isCompleted, candidateName, title, paymentConfig]);
+  }, [isCompleted, paymentConfig]);
 
   // Quiz timer starts ONLY after candidate fills Name & Email and clicks "Start Quiz Now"
   useEffect(() => {

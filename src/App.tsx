@@ -451,6 +451,19 @@ export default function App() {
     fetchMcqs();
   }, [selectedCategory, difficultyFilter, sortBy, currentPage, searchQuery]);
 
+  const handlePageChange = (newPage: number) => {
+    const targetPage = Math.max(1, Math.min(totalPages, newPage));
+    setCurrentPage(targetPage);
+    setTimeout(() => {
+      const el = document.getElementById('mcq-feed-top');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        window.scrollTo({ top: 380, behavior: 'smooth' });
+      }
+    }, 50);
+  };
+
   // Launch Daily Quiz
   const handleLaunchDailyQuiz = async () => {
     try {
@@ -676,6 +689,8 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Left Column: MCQ Feed */}
               <div className="lg:col-span-2 space-y-6">
+                <div id="mcq-feed-top" className="scroll-mt-24" />
+
                 {/* Category Header or Filter Bar */}
                 <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2">
@@ -685,7 +700,7 @@ export default function App() {
                     {selectedCategory && (
                       <button
                         onClick={() => setSelectedCategory(null)}
-                        className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold underline"
+                        className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold underline cursor-pointer"
                       >
                         Clear Filter
                       </button>
@@ -699,7 +714,7 @@ export default function App() {
                       <select
                         value={difficultyFilter}
                         onChange={e => setDifficultyFilter(e.target.value)}
-                        className="bg-slate-100 dark:bg-slate-800 rounded-lg p-1 font-semibold text-slate-700 dark:text-slate-200"
+                        className="bg-slate-100 dark:bg-slate-800 rounded-lg p-1 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
                       >
                         <option value="All">All</option>
                         <option value="Easy">Easy</option>
@@ -713,7 +728,7 @@ export default function App() {
                       <select
                         value={sortBy}
                         onChange={e => setSortBy(e.target.value)}
-                        className="bg-slate-100 dark:bg-slate-800 rounded-lg p-1 font-semibold text-slate-700 dark:text-slate-200"
+                        className="bg-slate-100 dark:bg-slate-800 rounded-lg p-1 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
                       >
                         <option value="newest">Newest</option>
                         <option value="most-viewed">Most Viewed</option>
@@ -723,6 +738,40 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+
+                {/* Top Pagination Bar: Instantly accessible on mobile and desktop without scrolling */}
+                {totalPages > 1 && (
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-3 px-4 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 text-xs shadow-sm">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-3.5 py-2 sm:px-4 sm:py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-100 dark:disabled:hover:bg-slate-800 transition font-bold flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow-sm min-h-[38px]"
+                      title="Previous Page"
+                    >
+                      <ChevronLeft className="w-4 h-4 shrink-0" />
+                      <span>Previous</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-center">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        Page <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">{currentPage}</span> of {totalPages}
+                      </span>
+                      <span className="text-[11px] text-slate-400 hidden sm:inline">
+                        ({totalMcqsCount} MCQs)
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-3.5 py-2 sm:px-4 sm:py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-100 dark:disabled:hover:bg-slate-800 transition font-bold flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow-sm min-h-[38px]"
+                      title="Next Page"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-4 h-4 shrink-0" />
+                    </button>
+                  </div>
+                )}
 
                 {/* MCQs List */}
                 {mcqs.length === 0 ? (
@@ -737,7 +786,7 @@ export default function App() {
                         setSearchQuery('');
                         setDifficultyFilter('All');
                       }}
-                      className="text-xs text-emerald-600 font-bold underline"
+                      className="text-xs text-emerald-600 font-bold underline cursor-pointer"
                     >
                       Reset Filters
                     </button>
@@ -760,28 +809,63 @@ export default function App() {
                   ))
                 )}
 
-                {/* Pagination Controls */}
+                {/* Bottom Pagination Controls */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800 text-xs">
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                      className="px-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 disabled:opacity-40 transition font-semibold flex items-center gap-1"
-                    >
-                      <ChevronLeft className="w-4 h-4" /> Previous
-                    </button>
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-sm mb-12 sm:mb-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2.5 sm:px-5 sm:py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 disabled:opacity-40 transition font-bold flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed text-xs sm:text-sm min-h-[44px] shadow-sm"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft className="w-4 h-4 shrink-0" />
+                        <span>Previous</span>
+                      </button>
 
-                    <span className="font-bold text-slate-500">
-                      Page {currentPage} of {totalPages}
-                    </span>
+                      <div className="text-center">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm block">
+                          Page <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">{currentPage}</span> of {totalPages}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block">
+                          {totalMcqsCount} Solved MCQs Available
+                        </span>
+                      </div>
 
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 disabled:opacity-40 transition font-semibold flex items-center gap-1"
-                    >
-                      Next <ChevronRight className="w-4 h-4" />
-                    </button>
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-4 py-2.5 sm:px-5 sm:py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 disabled:opacity-40 transition font-bold flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed text-xs sm:text-sm min-h-[44px] shadow-sm"
+                        title="Next Page"
+                      >
+                        <span>Next</span>
+                        <ChevronRight className="w-4 h-4 shrink-0" />
+                      </button>
+                    </div>
+
+                    {/* Quick Page Jump Pills (1, 2, 3...) */}
+                    <div className="flex items-center justify-center gap-1.5 flex-wrap pt-3 border-t border-slate-100 dark:border-slate-800">
+                      {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                        let pageNum = i + 1;
+                        if (totalPages > 7 && currentPage > 4) {
+                          pageNum = currentPage - 3 + i;
+                          if (pageNum > totalPages) pageNum = totalPages - (6 - i);
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            className={`min-w-[34px] h-[34px] px-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center ${
+                              currentPage === pageNum
+                                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -924,12 +1008,49 @@ export default function App() {
         settings={settings}
       />
 
-      {/* Floating Dark / Light Mode Toggle Button (Fixed Bottom-Right) */}
+      {/* Mobile Sticky Quick Pagination Bar - Guaranteed visible on all mobile devices when viewing questions */}
+      {activeTab === 'home' && totalPages > 1 && (
+        <div
+          id="mobile-sticky-pagination-bar"
+          className="fixed bottom-0 left-0 right-0 z-30 sm:hidden bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-3 py-2 shadow-2xl flex items-center justify-between gap-2"
+        >
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center gap-1 disabled:opacity-30 border border-slate-200 dark:border-slate-700 min-h-[40px] cursor-pointer disabled:cursor-not-allowed active:scale-95 transition"
+            title="Previous Page"
+          >
+            <ChevronLeft className="w-4 h-4 shrink-0" /> Previous
+          </button>
+
+          <div className="text-center px-1">
+            <span className="text-xs font-black text-slate-800 dark:text-slate-100 block">
+              Page {currentPage} of {totalPages}
+            </span>
+            <span className="text-[10px] text-slate-400 block font-medium">
+              {totalMcqsCount} Solved MCQs
+            </span>
+          </div>
+
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center gap-1 disabled:opacity-30 border border-slate-200 dark:border-slate-700 min-h-[40px] cursor-pointer disabled:cursor-not-allowed active:scale-95 transition"
+            title="Next Page"
+          >
+            Next <ChevronRight className="w-4 h-4 shrink-0" />
+          </button>
+        </div>
+      )}
+
+      {/* Floating Dark / Light Mode Toggle Button (Fixed Bottom-Right, elevated above mobile bar) */}
       <aside aria-label="Theme switcher">
         <button
           id="floating-theme-toggle"
           onClick={() => setDarkMode(prev => !prev)}
-          className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-40 w-12 h-12 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-amber-400 border border-slate-200/90 dark:border-slate-700 shadow-xl hover:shadow-2xl hover:scale-110 active:scale-95 transition-all duration-200 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-emerald-500/50 group backdrop-blur-sm cursor-pointer"
+          className={`fixed right-4 sm:right-6 z-40 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-amber-400 border border-slate-200/90 dark:border-slate-700 shadow-xl hover:shadow-2xl hover:scale-110 active:scale-95 transition-all duration-200 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-emerald-500/50 group backdrop-blur-sm cursor-pointer ${
+            activeTab === 'home' && totalPages > 1 ? 'bottom-16 sm:bottom-6' : 'bottom-5 sm:bottom-6'
+          }`}
           title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           aria-label={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
