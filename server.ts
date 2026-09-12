@@ -85,7 +85,7 @@ async function startServer() {
     }
 
     return res.status(401).json({
-      error: 'Ghalat Username/Email ya Password. Default credentials: username "admin", password "admin".'
+      error: 'Ghalat Username/Email ya Password. Baraye meharbani durust credentials darj karein.'
     });
   });
 
@@ -686,6 +686,10 @@ Output ONLY valid JSON array with format:
     const host = req.get('host') || 'futureacademypro.com';
     res.setHeader('Content-Type', 'text/plain');
     res.send(`User-agent: *\nAllow: /\nSitemap: https://${host}/sitemap.xml`);
+  });
+
+  app.get('/favicon.ico', (req, res) => {
+    res.redirect(301, '/favicon.svg');
   });
 
   // Vite middleware for dev or static serving for prod

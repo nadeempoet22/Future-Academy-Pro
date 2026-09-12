@@ -215,7 +215,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           setLoginLoading(false);
           return;
         } else {
-          setLoginError(data.error || 'Ghalat credentials! Default login: username "admin", password "admin".');
+          setLoginError(data.error || 'Ghalat credentials! Baraye meharbani durust Username ya Password darj karein.');
           setLoginLoading(false);
           return;
         }
@@ -240,7 +240,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setLoginPassword('');
       setLoginError('');
     } else {
-      setLoginError('Ghalat credentials! Default login: username "admin", password "admin".');
+      setLoginError('Ghalat credentials! Baraye meharbani durust Username ya Password darj karein.');
     }
     setLoginLoading(false);
   };
@@ -250,12 +250,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     localStorage.removeItem('futureacademy_admin_auth');
     localStorage.removeItem('pakmcqs_admin_auth');
     setLoginPassword('');
-    setLoginError('');
-  };
-
-  const handleQuickFillDefault = () => {
-    setLoginUsername('admin');
-    setLoginPassword('admin');
     setLoginError('');
   };
 
@@ -742,30 +736,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Future Academy Pro Admin Control Panel tak rasai ke liye credentials darj karein.
-            </p>
-          </div>
-
-          {/* Default Credentials Notice with 1-Click Auto Fill */}
-          <div className="bg-gradient-to-r from-emerald-50/80 to-teal-50/80 dark:from-emerald-950/40 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl p-4 text-xs space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" /> Default Credentials:
-              </span>
-              <button
-                type="button"
-                onClick={handleQuickFillDefault}
-                className="text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg transition shadow-xs cursor-pointer"
-                title="Click to automatically fill default username and password"
-              >
-                Auto-Fill
-              </button>
-            </div>
-            <div className="font-mono text-[11px] text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-emerald-500/20 flex items-center justify-between">
-              <span>Username: <strong className="font-bold text-emerald-900 dark:text-emerald-200">admin</strong></span>
-              <span>Password: <strong className="font-bold text-emerald-900 dark:text-emerald-200">admin</strong></span>
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              ℹ️ Login hone ke baad aap &quot;Security & Password&quot; tab mein ja kar apna username aur password ba-asani badal sakte hain.
             </p>
           </div>
 
@@ -2011,11 +1981,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                 {/* Current Password Field */}
                 <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 space-y-2">
-                  <label className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center justify-between">
-                    <span>Mojooda (Current) Password *</span>
-                    <span className="text-[11px] font-normal text-amber-700 dark:text-amber-400">
-                      (Default login ke waqt &quot;admin&quot; hai)
-                    </span>
+                  <label className="text-xs font-bold text-amber-900 dark:text-amber-300 block">
+                    Mojooda (Current) Password *
                   </label>
                   <div className="relative">
                     <input
