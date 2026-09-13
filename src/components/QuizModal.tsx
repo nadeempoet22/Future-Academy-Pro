@@ -20,12 +20,15 @@ import {
   Award,
   ListFilter,
   Lock,
-  CreditCard
+  CreditCard,
+  Shuffle,
+  RefreshCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CertificateCard } from './CertificateCard';
 import { CertificatePaymentGate } from './CertificatePaymentGate';
 import { downloadCertificatePdf, CertificateData } from '../utils/certificateGenerator';
+import { generateRandomQuiz } from '../utils/quizRandomizer';
 
 interface QuizModalProps {
   isOpen: boolean;
@@ -36,6 +39,8 @@ interface QuizModalProps {
   mode?: 'Practice' | 'Exam';
   onQuizComplete?: (result: QuizResult) => void;
   paymentConfig?: CertificatePaymentConfig;
+  allQuestions?: MCQ[];
+  onShuffleNewQuiz?: () => void;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
@@ -46,7 +51,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   questions,
   mode = 'Practice',
   onQuizComplete,
-  paymentConfig
+  paymentConfig,
+  allQuestions,
+  onShuffleNewQuiz
 }) => {
   const [candidateName, setCandidateName] = useState<string>(() => {
     try {
@@ -74,11 +81,16 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   const [enableNegativeMarking, setEnableNegativeMarking] = useState(false);
   const [resultTab, setResultTab] = useState<'certificate' | 'review'>('certificate');
 
+  // Automatic Randomizer State (Defaults to 50 Random MCQs)
+  const [activeQuestions, setActiveQuestions] = useState<MCQ[]>(questions);
+  const [questionCountChoice, setQuestionCountChoice] = useState<number>(50);
+  const [isShufflingAnimation, setIsShufflingAnimation] = useState(false);
+
   // Certificate Payment Status
   const [isCertificateUnlocked, setIsCertificateUnlocked] = useState(false);
   const [showPaymentGate, setShowPaymentGate] = useState(false);
 
-  // When modal is reopened, reload stored candidate info and reset state
+  // When modal is opened, reload stored candidate info and dynamically generate fresh 50 random MCQs
   useEffect(() => {
     if (isOpen) {
       try {
@@ -98,8 +110,47 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       setResultTab('certificate');
       setIsCertificateUnlocked(false);
       setShowPaymentGate(false);
+
+      // Auto-randomize questions from the question bank every single time
+      const poolToUse = allQuestions && allQuestions.length > 0 ? allQuestions : questions;
+      if (poolToUse && poolToUse.length > 0) {
+        const randomRes = generateRandomQuiz({
+          pool: poolToUse,
+          count: questionCountChoice,
+          category: categoryName,
+          forceFreshRandom: true
+        });
+        if (randomRes.questions && randomRes.questions.length > 0) {
+          setActiveQuestions(randomRes.questions);
+        } else {
+          setActiveQuestions(questions);
+        }
+      } else {
+        setActiveQuestions(questions);
+      }
     }
-  }, [isOpen, mode]);
+  }, [isOpen, mode, categoryName]);
+
+  const handleShuffleFreshQuiz = (newCount?: number) => {
+    setIsShufflingAnimation(true);
+    const count = newCount || questionCountChoice;
+    const poolToUse = allQuestions && allQuestions.length > 0 ? allQuestions : (activeQuestions.length > 0 ? activeQuestions : questions);
+    const res = generateRandomQuiz({
+      pool: poolToUse,
+      count: count,
+      category: categoryName,
+      forceFreshRandom: true
+    });
+    setTimeout(() => {
+      if (res.questions && res.questions.length > 0) {
+        setActiveQuestions(res.questions);
+      }
+      setCurrentIndex(0);
+      setUserAnswers({});
+      setIsCompleted(false);
+      setIsShufflingAnimation(false);
+    }, 200);
+  };
 
   // When quiz completes, certificate stays LOCKED by default until fee is paid and verified
   useEffect(() => {
@@ -125,10 +176,11 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     return () => clearInterval(timer);
   }, [isOpen, quizStarted, isCompleted]);
 
-  if (!isOpen || questions.length === 0) return null;
+  const currentQuestions = activeQuestions.length > 0 ? activeQuestions : questions;
+  if (!isOpen || currentQuestions.length === 0) return null;
 
-  const currentMcq = questions[currentIndex];
-  const isLastQuestion = currentIndex === questions.length - 1;
+  const currentMcq = currentQuestions[currentIndex] || currentQuestions[0];
+  const isLastQuestion = currentIndex === currentQuestions.length - 1;
 
   const handleStartQuiz = (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,7 +217,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   };
 
   const handleNext = () => {
-    if (currentIndex < questions.length - 1) {
+    if (currentIndex < currentQuestions.length - 1) {
       setCurrentIndex(prev => prev + 1);
     }
   };
@@ -181,7 +233,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     let wrong = 0;
     let skipped = 0;
 
-    questions.forEach((q, i) => {
+    currentQuestions.forEach((q, i) => {
       const ans = userAnswers[i];
       if (!ans) {
         skipped++;
@@ -197,7 +249,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       finalScore = Math.max(0, correct - wrong * 0.25);
     }
 
-    const percentage = Math.round((correct / questions.length) * 100);
+    const percentage = Math.round((correct / currentQuestions.length) * 100);
 
     return { correct, wrong, skipped, finalScore, percentage };
   };
@@ -218,7 +270,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       id: `qres-${Date.now()}`,
       quizTitle: title,
       category: categoryName,
-      totalQuestions: questions.length,
+      totalQuestions: currentQuestions.length,
       correctAnswers: scoreData.correct,
       wrongAnswers: scoreData.wrong,
       skippedQuestions: scoreData.skipped,
@@ -291,7 +343,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       categoryName: categoryName,
       scorePercentage: scoreData.percentage,
       correctAnswers: scoreData.correct,
-      totalQuestions: questions.length,
+      totalQuestions: currentQuestions.length,
       timeSeconds: timeSeconds,
       quizMode: quizMode
     });
@@ -405,6 +457,55 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 </div>
               </div>
 
+              {/* Question Count & Automatic Randomizer Settings */}
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Shuffle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    Quiz Questions Count (سوالات کی تعداد):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleShuffleFreshQuiz(questionCountChoice)}
+                    className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-1 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800 shadow-sm transition active:scale-95 cursor-pointer"
+                    title="Generate new random question batch"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isShufflingAnimation ? 'animate-spin' : ''}`} />
+                    <span>Re-Shuffle 50 MCQs</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { count: 50, label: '50 MCQs', sub: 'Full Mock Test (تجویز کردہ)' },
+                    { count: 25, label: '25 MCQs', sub: 'Standard Practice' },
+                    { count: 10, label: '10 MCQs', sub: 'Quick Revision' }
+                  ].map(item => {
+                    const isSelected = questionCountChoice === item.count;
+                    return (
+                      <button
+                        key={item.count}
+                        type="button"
+                        onClick={() => {
+                          setQuestionCountChoice(item.count);
+                          handleShuffleFreshQuiz(item.count);
+                        }}
+                        className={`p-2.5 rounded-xl text-center border transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm font-bold'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="text-xs font-black">{item.label}</span>
+                        <span className={`text-[10px] line-clamp-1 ${isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>
+                          {item.sub}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Quiz Configuration (Mode & Negative marking) */}
               <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-3">
                 <div>
@@ -460,7 +561,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                   </label>
 
                   <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
-                    {questions.length} Questions
+                    {currentQuestions.length} Questions Ready
                   </span>
                 </div>
               </div>
@@ -526,10 +627,10 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             {/* Question Progress Indicator */}
             <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-3">
               <span>
-                Question {currentIndex + 1} of {questions.length}
+                Question {currentIndex + 1} of {currentQuestions.length}
               </span>
               <span>
-                Attempted: {Object.keys(userAnswers).length} / {questions.length}
+                Attempted: {Object.keys(userAnswers).length} / {currentQuestions.length}
               </span>
             </div>
 
@@ -600,26 +701,33 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
             {/* Bottom Question Grid & Navigation */}
             <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-1.5 max-w-xs overflow-x-auto">
-                {questions.map((_, idx) => {
-                  const isAns = userAnswers[idx] !== undefined;
-                  const isCurr = idx === currentIndex;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => setCurrentIndex(idx)}
-                      className={`w-7 h-7 rounded-lg text-xs font-semibold transition ${
-                        isCurr
-                          ? 'ring-2 ring-emerald-500 font-bold'
-                          : isAns
-                          ? 'bg-emerald-500 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  );
-                })}
+              <div className="w-full sm:w-auto">
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1 flex items-center justify-between">
+                  <span>Question Navigator ({currentQuestions.length} MCQs)</span>
+                  <span>{Object.keys(userAnswers).length} Answered</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto max-w-full sm:max-w-md p-1.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                  {currentQuestions.map((_, idx) => {
+                    const isAns = userAnswers[idx] !== undefined;
+                    const isCurr = idx === currentIndex;
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => setCurrentIndex(idx)}
+                        className={`w-7 h-7 rounded-lg text-xs font-semibold transition shrink-0 ${
+                          isCurr
+                            ? 'ring-2 ring-emerald-500 font-bold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-100'
+                            : isAns
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                        }`}
+                        title={`Question ${idx + 1}`}
+                      >
+                        {idx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -684,7 +792,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 categoryName: categoryName,
                 scorePercentage: res.percentage,
                 correctAnswers: res.correct,
-                totalQuestions: questions.length,
+                totalQuestions: currentQuestions.length,
                 timeSeconds: timeSeconds,
                 quizMode: quizMode
               };
@@ -706,7 +814,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                         Correct
                       </span>
                       <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">
-                        {res.correct} / {questions.length}
+                        {res.correct} / {currentQuestions.length}
                       </span>
                     </div>
                     <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20">
@@ -749,7 +857,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                       }`}
                     >
-                      <ListFilter className="w-3.5 h-3.5" /> Review Questions
+                      <ListFilter className="w-3.5 h-3.5" /> Review Questions ({currentQuestions.length})
                     </button>
                   </div>
 
@@ -789,7 +897,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                   {/* Tab 2: Detailed Question Review */}
                   {resultTab === 'review' && (
                     <div className="space-y-3.5 text-left max-h-[460px] overflow-y-auto pr-2">
-                      {questions.map((q, idx) => {
+                      {currentQuestions.map((q, idx) => {
                         const userAns = userAnswers[idx];
                         const isCorrect = userAns === q.correctAnswer;
                         const isSkipped = !userAns;
@@ -875,9 +983,24 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                         setTimeSeconds(0);
                         setQuizStarted(false);
                       }}
-                      className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition"
+                      className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition cursor-pointer"
                     >
-                      <RotateCcw className="w-4 h-4" /> Retake Quiz
+                      <RotateCcw className="w-4 h-4" /> Retake Same Quiz
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleShuffleFreshQuiz();
+                        setIsCompleted(false);
+                        setCurrentIndex(0);
+                        setUserAnswers({});
+                        setTimeSeconds(0);
+                        setQuizStarted(true);
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4" /> 🎲 New Random {questionCountChoice} MCQs
                     </button>
 
                     {isPaymentRequired && !isCertificateUnlocked ? (

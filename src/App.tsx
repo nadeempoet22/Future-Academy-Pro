@@ -23,6 +23,7 @@ import { AISearchModal } from './components/AISearchModal';
 import { AdminPanel } from './components/AdminPanel';
 import { BlogSection } from './components/BlogSection';
 import { LegalModals } from './components/LegalModals';
+import { generateRandomQuiz } from './utils/quizRandomizer';
 import {
   Search,
   Sparkles,
@@ -625,14 +626,14 @@ export default function App() {
     }, 50);
   };
 
-  // Launch Daily Quiz
+  // Launch Daily Quiz (Generates 50 fresh random MCQs)
   const handleLaunchDailyQuiz = async () => {
     try {
       const res = await fetch('/api/quiz/daily');
       if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
         const data = await res.json();
         if (data.questions && data.questions.length > 0) {
-          setQuizTitle('Daily FPSC/PPSC Quiz');
+          setQuizTitle('Daily FPSC/PPSC Quiz (50 MCQs)');
           setQuizCategory('General');
           setQuizMcqList(data.questions);
           setQuizModalOpen(true);
@@ -644,25 +645,25 @@ export default function App() {
     }
 
     const pool = allLocalMcqs.length > 0 ? allLocalMcqs : initialMcqs;
-    const shuffled = [...pool].sort(() => 0.5 - Math.random());
-    setQuizTitle('Daily FPSC/PPSC Quiz');
+    const randomBatch = generateRandomQuiz({ pool, count: 50, forceFreshRandom: true });
+    setQuizTitle('Daily FPSC/PPSC Quiz (50 MCQs)');
     setQuizCategory('General');
-    setQuizMcqList(shuffled.slice(0, 10));
+    setQuizMcqList(randomBatch.questions);
     setQuizModalOpen(true);
   };
 
-  // Launch Category Quiz
+  // Launch Category Quiz (Generates 50 fresh random MCQs for category)
   const handleLaunchCategoryQuiz = async (catName: string) => {
     try {
       const res = await fetch('/api/quiz/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: catName, count: 10 })
+        body: JSON.stringify({ category: catName, count: 50 })
       });
       if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
         const data = await res.json();
         if (data.questions && data.questions.length > 0) {
-          setQuizTitle(`${catName} Test`);
+          setQuizTitle(`${catName} Test (50 MCQs)`);
           setQuizCategory(catName);
           setQuizMcqList(data.questions);
           setQuizModalOpen(true);
@@ -674,19 +675,15 @@ export default function App() {
     }
 
     const pool = allLocalMcqs.length > 0 ? allLocalMcqs : initialMcqs;
-    const catLower = catName.toLowerCase();
-    const catQuestions = pool.filter(
-      m =>
-        m.category.toLowerCase() === catLower ||
-        m.category.toLowerCase().includes(catLower) ||
-        catLower.includes(m.category.toLowerCase()) ||
-        (m.subject && m.subject.toLowerCase().includes(catLower))
-    );
-    const chosenPool = catQuestions.length > 0 ? catQuestions : pool;
-    const shuffled = [...chosenPool].sort(() => 0.5 - Math.random());
-    setQuizTitle(`${catName} Test`);
+    const randomBatch = generateRandomQuiz({
+      pool,
+      count: 50,
+      category: catName,
+      forceFreshRandom: true
+    });
+    setQuizTitle(`${catName} Test (50 MCQs)`);
     setQuizCategory(catName);
-    setQuizMcqList(shuffled.slice(0, 10));
+    setQuizMcqList(randomBatch.questions);
     setQuizModalOpen(true);
   };
 
@@ -1151,6 +1148,7 @@ export default function App() {
         title={quizTitle}
         categoryName={quizCategory}
         questions={quizMcqList}
+        allQuestions={allLocalMcqs.length > 0 ? allLocalMcqs : initialMcqs}
         onQuizComplete={handleQuizComplete}
         paymentConfig={settings.certificatePayment}
       />

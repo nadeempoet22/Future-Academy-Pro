@@ -594,37 +594,74 @@ async function startServer() {
     res.json({ status: 'success' });
   });
 
-  // 4. Quiz Generator & Submission
+  // 4. Quiz Generator & Submission with 50-MCQ Automatic Randomizer
   app.get('/api/quiz/daily', (req, res) => {
-    // Return 10 random MCQs for Daily Quiz
-    const shuffled = [...mcqs].sort(() => 0.5 - Math.random());
+    // Return 50 random MCQs for Daily Quiz using high-entropy Fisher-Yates shuffle
+    const copy = [...mcqs];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    const targetCount = Math.min(50, copy.length);
     res.json({
-      title: 'Daily Practice Quiz',
-      questions: shuffled.slice(0, 10)
+      title: 'Daily Practice Quiz (50 MCQs)',
+      questions: copy.slice(0, targetCount)
     });
   });
 
   app.post('/api/quiz/generate', (req, res) => {
-    const { category, subcategory, difficulty, count = 10 } = req.body;
+    const { category, subcategory, difficulty, count = 50 } = req.body;
+    const countNum = Math.max(1, parseInt(String(count), 10) || 50);
 
-    let pool = [...mcqs];
+    let categoryMatched: MCQ[] = [];
     if (category && category !== 'All') {
-      pool = pool.filter(m => m.category.toLowerCase().includes(category.toLowerCase()));
-    }
-    if (subcategory) {
-      pool = pool.filter(m => m.subcategory && m.subcategory.toLowerCase().includes(subcategory.toLowerCase()));
-    }
-    if (difficulty && difficulty !== 'All') {
-      pool = pool.filter(m => m.difficulty.toLowerCase() === difficulty.toLowerCase());
+      const catLower = String(category).toLowerCase();
+      categoryMatched = mcqs.filter(m => {
+        const mCat = (m.category || '').toLowerCase();
+        const mSub = (m.subject || '').toLowerCase();
+        return mCat.includes(catLower) || catLower.includes(mCat) || mSub.includes(catLower);
+      });
     }
 
-    const shuffled = pool.sort(() => 0.5 - Math.random());
-    const countNum = parseInt(String(count), 10) || 10;
-    const selected = shuffled.slice(0, Math.min(countNum, pool.length));
+    if (subcategory && categoryMatched.length > 0) {
+      const subLower = String(subcategory).toLowerCase();
+      const subFiltered = categoryMatched.filter(m => m.subcategory && m.subcategory.toLowerCase().includes(subLower));
+      if (subFiltered.length > 0) {
+        categoryMatched = subFiltered;
+      }
+    }
+
+    if (difficulty && difficulty !== 'All' && categoryMatched.length > 0) {
+      const diffFiltered = categoryMatched.filter(m => (m.difficulty || '').toLowerCase() === String(difficulty).toLowerCase());
+      if (diffFiltered.length > 0) {
+        categoryMatched = diffFiltered;
+      }
+    }
+
+    // Shuffle category matched questions using Fisher-Yates
+    const shuffledCat = [...categoryMatched];
+    for (let i = shuffledCat.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledCat[i], shuffledCat[j]] = [shuffledCat[j], shuffledCat[i]];
+    }
+
+    const selected = shuffledCat.slice(0, countNum);
+
+    // If selected has fewer than countNum, backfill from the rest of the pool shuffled
+    if (selected.length < countNum) {
+      const selectedIds = new Set(selected.map(q => q.id));
+      const remainingPool = mcqs.filter(q => !selectedIds.has(q.id));
+      for (let i = remainingPool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [remainingPool[i], remainingPool[j]] = [remainingPool[j], remainingPool[i]];
+      }
+      const needed = countNum - selected.length;
+      selected.push(...remainingPool.slice(0, needed));
+    }
 
     res.json({
-      title: `${category || 'Custom'} Quiz`,
-      questions: selected.length > 0 ? selected : mcqs.slice(0, countNum)
+      title: `${category || 'Custom'} Quiz (${selected.length} MCQs)`,
+      questions: selected
     });
   });
 
