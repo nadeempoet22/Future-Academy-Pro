@@ -1,8 +1,8 @@
 {
   "syncMeta": {
-    "version": 2,
-    "lastModified": 1789208996474,
-    "lastAction": "Test sync broadcast"
+    "version": 4,
+    "lastModified": 1789361348362,
+    "lastAction": "MCQ deleted"
   },
   "siteSettings": {
     "siteName": "Future Academy Pro",
@@ -39,7 +39,7 @@
       "slug": "pakistan-affairs",
       "description": "History of Pakistan, Movement, Constitution, Foreign Policy & Current Affairs",
       "iconName": "Landmark",
-      "questionCount": 10,
+      "questionCount": 11,
       "subcategories": [
         {
           "id": "sub-pre-1947",

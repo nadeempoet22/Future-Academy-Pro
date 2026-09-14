@@ -24,6 +24,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { BlogSection } from './components/BlogSection';
 import { LegalModals } from './components/LegalModals';
 import { generateRandomQuiz } from './utils/quizRandomizer';
+import { enrichCategoriesWithLiveCounts, isMcqInCategory } from './utils/categoryHelper';
 import {
   Search,
   Sparkles,
@@ -178,6 +179,20 @@ export default function App() {
     }
     return initialBlogPosts;
   });
+
+  // Dynamic Real-Time Category State: Automatically calculates live question count for every category based on current MCQs pool
+  const liveCategories = React.useMemo(() => {
+    return enrichCategoriesWithLiveCounts(categories, allLocalMcqs);
+  }, [categories, allLocalMcqs]);
+
+  // Keep localStorage categories synchronized with live dynamic question counts
+  useEffect(() => {
+    if (liveCategories && liveCategories.length > 0) {
+      try {
+        localStorage.setItem('futureacademy_categories', JSON.stringify(liveCategories));
+      } catch {}
+    }
+  }, [liveCategories]);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -354,14 +369,7 @@ export default function App() {
 
     let filtered = [...currentPool];
     if (selectedCategory) {
-      const sel = selectedCategory.toLowerCase();
-      filtered = filtered.filter(
-        m =>
-          m.category.toLowerCase() === sel ||
-          m.category.toLowerCase().includes(sel) ||
-          sel.includes(m.category.toLowerCase()) ||
-          (m.subject && m.subject.toLowerCase().includes(sel))
-      );
+      filtered = filtered.filter(m => isMcqInCategory(m, selectedCategory));
     }
     if (difficultyFilter !== 'All') {
       filtered = filtered.filter(m => m.difficulty.toLowerCase() === difficultyFilter.toLowerCase());
@@ -734,7 +742,7 @@ export default function App() {
       {/* Header Navbar */}
       <Header
         settings={settings}
-        categories={categories}
+        categories={liveCategories}
         activeTab={activeTab}
         setActiveTab={handleTabChange}
         selectedCategory={selectedCategory}
@@ -1059,7 +1067,7 @@ export default function App() {
                     Top Subject Categories
                   </h3>
                   <div className="space-y-2">
-                    {categories.slice(0, 8).map(cat => (
+                    {liveCategories.slice(0, 8).map(cat => (
                       <button
                         key={cat.id}
                         onClick={() => {
@@ -1073,7 +1081,7 @@ export default function App() {
                         }`}
                       >
                         <span>{cat.name}</span>
-                        <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-400">
+                        <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-bold">
                           {cat.questionCount}
                         </span>
                       </button>
@@ -1084,7 +1092,7 @@ export default function App() {
                     onClick={() => setActiveTab('categories')}
                     className="w-full mt-4 text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center block hover:underline"
                   >
-                    View All {categories.length} Categories →
+                    View All {liveCategories.length} Categories →
                   </button>
                 </div>
 
@@ -1098,7 +1106,7 @@ export default function App() {
         {/* Tab: All Categories Page */}
         {activeTab === 'categories' && (
           <CategoryGrid
-            categories={categories}
+            categories={liveCategories}
             onSelectCategory={catName => {
               setSelectedCategory(catName);
               handleTabChange('home');
@@ -1114,11 +1122,24 @@ export default function App() {
         {activeTab === 'admin' && (
           <AdminPanel
             settings={settings}
-            categories={categories}
+            categories={liveCategories}
             mcqs={allLocalMcqs}
             initialCategoryForMcq={adminCategoryForAdd}
             onUpdateSettings={setSettings}
+            onUpdateAllMcqs={(updatedList) => {
+              setAllLocalMcqs(updatedList);
+              localStorage.setItem('futureacademy_mcqs', JSON.stringify(updatedList));
+            }}
             onRefreshMcqs={async () => {
+              try {
+                const raw = localStorage.getItem('futureacademy_mcqs');
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setAllLocalMcqs(parsed);
+                  }
+                }
+              } catch {}
               await Promise.all([fetchMcqs(), fetchAllMcqs()]);
               await checkLiveSync(true);
             }}

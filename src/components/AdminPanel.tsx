@@ -64,6 +64,7 @@ interface AdminPanelProps {
   onUpdateSettings: (newSettings: SiteSettings) => void;
   onRefreshMcqs: () => void;
   onRefreshCategories: () => void;
+  onUpdateAllMcqs?: (updatedList: MCQ[]) => void;
   onExitAdmin?: () => void;
 }
 
@@ -75,6 +76,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onUpdateSettings,
   onRefreshMcqs,
   onRefreshCategories,
+  onUpdateAllMcqs,
   onExitAdmin
 }) => {
   const [activeTab, setActiveTab] = useState<'analytics' | 'mcqs' | 'payments' | 'import' | 'categories' | 'ads' | 'security' | 'settings' | 'backup'>('analytics');
@@ -579,6 +581,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         currentLocalMcqs = [targetMcqToSave, ...currentLocalMcqs];
       }
       localStorage.setItem('futureacademy_mcqs', JSON.stringify(currentLocalMcqs));
+      if (onUpdateAllMcqs) {
+        onUpdateAllMcqs(currentLocalMcqs);
+      }
       // Save directly to Cloud Firestore so all mobiles & PCs update instantly
       await saveMcqToCloud(targetMcqToSave);
     } catch (err) {
@@ -609,7 +614,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const saved = localStorage.getItem('futureacademy_mcqs');
         if (saved) {
           const list: MCQ[] = JSON.parse(saved);
-          localStorage.setItem('futureacademy_mcqs', JSON.stringify(list.filter(m => m.id !== id)));
+          const updatedList = list.filter(m => m.id !== id);
+          localStorage.setItem('futureacademy_mcqs', JSON.stringify(updatedList));
+          if (onUpdateAllMcqs) {
+            onUpdateAllMcqs(updatedList);
+          }
         }
       } catch {}
 
@@ -759,6 +768,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }));
       currentLocal = [...converted, ...currentLocal];
       localStorage.setItem('futureacademy_mcqs', JSON.stringify(currentLocal));
+      if (onUpdateAllMcqs) {
+        onUpdateAllMcqs(currentLocal);
+      }
 
       // Push all imported questions to Cloud Firestore so every device syncs
       try {
@@ -2918,7 +2930,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   >
                     {categories.map(c => (
                       <option key={c.id} value={c.name}>
-                        {c.name}
+                        {c.name} ({c.questionCount} MCQs)
                       </option>
                     ))}
                   </select>

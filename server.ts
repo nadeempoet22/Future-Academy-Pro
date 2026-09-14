@@ -540,19 +540,51 @@ async function startServer() {
     res.json(mcqs);
   });
 
+  // Server-side robust category matching helper
+  const countMcqsForCategoryServer = (catName: string): number => {
+    const target = (catName || '').trim().toLowerCase();
+    const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\b(mcqs|mcq|test|tests|exam|exams|preparation|prep)\b/g, ' ').trim();
+    const normTarget = normalize(target);
+
+    return mcqs.filter(m => {
+      const cat = (m.category || '').trim().toLowerCase();
+      const sub = (m.subject || '').trim().toLowerCase();
+      if (cat === target || sub === target) return true;
+      if (cat.includes(target) || target.includes(cat)) return true;
+      if (sub && (sub.includes(target) || target.includes(sub))) return true;
+
+      const normCat = normalize(cat);
+      const normSub = normalize(sub);
+      if (normTarget && normCat && (normTarget === normCat || normCat.includes(normTarget) || normTarget.includes(normCat))) return true;
+      if (normTarget && normSub && (normTarget === normSub || normSub.includes(normTarget) || normTarget.includes(normSub))) return true;
+
+      // Special domain aliases
+      if (normTarget.includes('pakistan') && (normCat.includes('pak') || normCat.includes('pakistan'))) return true;
+      if (normTarget.includes('current affairs') && normCat.includes('current')) return true;
+      if (normTarget.includes('islam') && normCat.includes('islam')) return true;
+      if (normTarget.includes('general knowledge') && (normCat.includes('gk') || normCat.includes('general'))) return true;
+      if (normTarget.includes('computer') && (normCat.includes('cs') || normCat.includes('it') || normCat.includes('computer'))) return true;
+
+      return false;
+    }).length;
+  };
+
   // 3. Categories & Subcategories API
   app.get('/api/categories', (req, res) => {
     const categoriesWithCount = categories.map(cat => {
-      const catLower = cat.name.toLowerCase();
-      const count = mcqs.filter(
-        m =>
-          m.category?.toLowerCase() === catLower ||
-          m.category?.toLowerCase().includes(catLower) ||
-          catLower.includes(m.category?.toLowerCase())
-      ).length;
+      const liveCount = countMcqsForCategoryServer(cat.name);
+      const liveSubs = (cat.subcategories || []).map(sub => {
+        const subLower = (sub.name || '').trim().toLowerCase();
+        const subCount = mcqs.filter(m => {
+          const mSub = (m.subcategory || '').trim().toLowerCase();
+          return mSub && (mSub === subLower || mSub.includes(subLower) || subLower.includes(mSub));
+        }).length;
+        return { ...sub, questionCount: subCount };
+      });
       return {
         ...cat,
-        questionCount: count > 0 ? count : cat.questionCount
+        questionCount: liveCount,
+        subcategories: liveSubs
       };
     });
     res.json(categoriesWithCount);
