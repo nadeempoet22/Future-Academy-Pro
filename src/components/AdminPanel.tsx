@@ -294,8 +294,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  // Login Form States
-  const [loginUsername, setLoginUsername] = useState('');
+  // Login Form States (Default username: nadeemali1419)
+  const [loginUsername, setLoginUsername] = useState(MASTER_ADMIN_USERNAME);
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -545,7 +545,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setLoginPassword('');
       setLoginError('');
     } else {
-      setLoginError('Ghalat credentials! Purana username aur password mukammal tor par khatam kar diya gaya hai. Sirf naye authorized credentials (nadeemali1419) se login karein.');
+      setLoginError('Ghalat credentials! Sirf authorized credentials (Username: nadeemali1419, Password: nadeemali001#) se login karein.');
     }
     setLoginLoading(false);
   };
@@ -1154,6 +1154,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           )}
 
+          {/* Default Credentials Guidance Card */}
+          <div className="p-3.5 bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/60 rounded-xl text-xs space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-emerald-800 dark:text-emerald-300">
+              <KeyRound className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Default Authorized Admin Credentials</span>
+            </div>
+            <div className="text-[11px] text-slate-600 dark:text-slate-300 flex flex-wrap gap-x-4 gap-y-1 pt-0.5">
+              <span>Username: <strong className="font-mono text-emerald-700 dark:text-emerald-300 select-all">nadeemali1419</strong></span>
+              <span>Password: <strong className="font-mono text-emerald-700 dark:text-emerald-300 select-all">nadeemali001#</strong></span>
+            </div>
+          </div>
+
           {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
@@ -1165,8 +1177,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 required
                 value={loginUsername}
                 onChange={e => setLoginUsername(e.target.value)}
-                placeholder="Username ya Email darj karein"
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                placeholder="nadeemali1419"
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none font-medium"
               />
             </div>
 
@@ -1180,7 +1192,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   required
                   value={loginPassword}
                   onChange={e => setLoginPassword(e.target.value)}
-                  placeholder="Enter admin password"
+                  placeholder="nadeemali001#"
                   className="w-full px-4 py-3 pr-11 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
                 <button

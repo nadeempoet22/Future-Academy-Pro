@@ -100,8 +100,14 @@ function loadDatabase() {
       if (Array.isArray(data.certificatePayments)) certificatePayments = data.certificatePayments;
       if (Array.isArray(data.preapprovedTids)) preapprovedTids = new Set(data.preapprovedTids);
       if (data.adminCredentials) {
-        // Automatically migrate legacy default credentials to the requested master admin
-        if (data.adminCredentials.username === 'admin' && data.adminCredentials.password === 'admin') {
+        // Automatically enforce master admin credentials: nadeemali1419 / nadeemali001#
+        if (
+          !data.adminCredentials.username ||
+          data.adminCredentials.username === 'admin' ||
+          data.adminCredentials.password === 'admin' ||
+          data.adminCredentials.username !== 'nadeemali1419' ||
+          data.adminCredentials.password !== 'nadeemali001#'
+        ) {
           adminCredentials = {
             username: 'nadeemali1419',
             email: 'nadeem.poet22@gmail.com',
@@ -113,6 +119,12 @@ function loadDatabase() {
           adminCredentials = data.adminCredentials;
         }
       } else {
+        adminCredentials = {
+          username: 'nadeemali1419',
+          email: 'nadeem.poet22@gmail.com',
+          password: 'nadeemali001#',
+          updatedAt: new Date().toISOString()
+        };
         saveDatabase();
       }
       console.log(`[Database Loaded] ${mcqs.length} MCQs, ${categories.length} Categories, Sync Version: ${syncMeta.version}`);
@@ -235,7 +247,7 @@ async function startServer() {
     }
 
     return res.status(401).json({
-      error: 'Ghalat Username/Email ya Password. Baraye meharbani durust credentials darj karein.'
+      error: 'Ghalat Username/Email ya Password. Sirf authorized credentials (Username: nadeemali1419, Password: nadeemali001#) se login karein.'
     });
   });
 

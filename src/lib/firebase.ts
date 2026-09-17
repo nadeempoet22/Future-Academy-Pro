@@ -275,7 +275,7 @@ export function subscribeToCloudSettings(
 export const MASTER_ADMIN_USERNAME = 'nadeemali1419';
 export const MASTER_ADMIN_EMAIL = 'nadeem.poet22@gmail.com';
 export const MASTER_ADMIN_PASSWORD = 'nadeemali001#';
-export const MASTER_ADMIN_SESSION_RESET_VERSION = 'v2_purge_2026_09_17_nadeem';
+export const MASTER_ADMIN_SESSION_RESET_VERSION = 'v7_forced_logout_nadeemali1419_nadeemali001_strictly_enforced';
 
 export interface CloudAdminCredentials {
   username: string;
