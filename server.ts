@@ -414,10 +414,21 @@ async function startServer() {
 
     mcqs.unshift(newMcq);
 
-    // Update category count
-    const catObj = categories.find(c => c.name.toLowerCase() === category.toLowerCase());
+    // Update category count or auto-register new category
+    let catObj = categories.find(c => c.name.toLowerCase() === category.toLowerCase());
     if (catObj) {
       catObj.questionCount += 1;
+    } else {
+      catObj = {
+        id: `cat-${Date.now()}`,
+        name: category,
+        slug: category.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        description: `${category} preparation MCQs`,
+        iconName: 'BookOpen',
+        questionCount: 1,
+        subcategories: []
+      };
+      categories.push(catObj);
     }
 
     triggerSyncUpdate(`New MCQ added: ${newMcq.question.slice(0, 35)}`);

@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   setDoc,
+  getDoc,
   getDocs,
   deleteDoc,
   onSnapshot,
@@ -271,11 +272,34 @@ export function subscribeToCloudSettings(
   }
 }
 
+export const MASTER_ADMIN_USERNAME = 'nadeemali1419';
+export const MASTER_ADMIN_EMAIL = 'nadeem.poet22@gmail.com';
+export const MASTER_ADMIN_PASSWORD = 'nadeemali001#';
+export const MASTER_ADMIN_SESSION_RESET_VERSION = 'v2_purge_2026_09_17_nadeem';
+
 export interface CloudAdminCredentials {
   username: string;
   email: string;
   password?: string;
+  sessionVersion?: string;
   updatedAt: string;
+}
+
+/**
+ * Get current Admin credentials directly from Cloud Firestore (useful for Vercel/client-side)
+ */
+export async function getAdminCredentialsFromCloud(): Promise<CloudAdminCredentials | null> {
+  const path = 'adminAuth/master';
+  try {
+    const snap = await getDoc(doc(db, 'adminAuth', 'master'));
+    if (snap.exists()) {
+      return snap.data() as CloudAdminCredentials;
+    }
+    return null;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, path);
+    return null;
+  }
 }
 
 /**
@@ -285,6 +309,7 @@ export async function saveAdminCredentialsToCloud(creds: {
   username: string;
   email: string;
   password?: string;
+  sessionVersion?: string;
 }): Promise<boolean> {
   const path = 'adminAuth/master';
   try {
@@ -296,12 +321,29 @@ export async function saveAdminCredentialsToCloud(creds: {
     if (creds.password && creds.password.trim()) {
       payload.password = creds.password.trim();
     }
+    if (creds.sessionVersion) {
+      payload.sessionVersion = creds.sessionVersion;
+    }
     await setDoc(doc(db, 'adminAuth', 'master'), payload, { merge: true });
     return true;
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
     return false;
   }
+}
+
+/**
+ * Force log out all devices across the world by bumping the cloud session version
+ */
+export async function forceLogoutAllDevicesInCloud(): Promise<string> {
+  const newSessionVersion = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+  await saveAdminCredentialsToCloud({
+    username: MASTER_ADMIN_USERNAME,
+    email: MASTER_ADMIN_EMAIL,
+    password: MASTER_ADMIN_PASSWORD,
+    sessionVersion: newSessionVersion
+  });
+  return newSessionVersion;
 }
 
 /**

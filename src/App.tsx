@@ -318,8 +318,12 @@ export default function App() {
       if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          setCategories(data);
-          localStorage.setItem('futureacademy_categories', JSON.stringify(data));
+          setCategories(prev => {
+            const serverIds = new Set(data.map((c: Category) => c.id));
+            const localOnly = prev.filter(c => !serverIds.has(c.id));
+            const merged = [...data, ...localOnly];
+            return merged;
+          });
         }
       }
     } catch {
@@ -470,8 +474,13 @@ export default function App() {
       if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
         const data = await res.json();
         if (data && Array.isArray(data.mcqs) && data.mcqs.length > 0) {
-          setAllLocalMcqs(data.mcqs);
-          localStorage.setItem('futureacademy_mcqs', JSON.stringify(data.mcqs));
+          setAllLocalMcqs(prev => {
+            const serverIds = new Set(data.mcqs.map((m: MCQ) => m.id));
+            const localOnly = prev.filter(m => !serverIds.has(m.id));
+            const merged = [...localOnly, ...data.mcqs];
+            localStorage.setItem('futureacademy_mcqs', JSON.stringify(merged));
+            return merged;
+          });
         }
       }
     } catch {

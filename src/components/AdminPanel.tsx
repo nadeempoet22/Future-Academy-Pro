@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MCQ, Category, SiteSettings, Option, CertificatePaymentSubmission } from '../types';
+import { enrichCategoriesWithLiveCounts, countMcqsForCategory, isMcqInCategory } from '../utils/categoryHelper';
 import {
   ShieldCheck,
   Plus,
@@ -55,7 +56,13 @@ import {
   saveCategoriesToCloud,
   saveSettingsToCloud,
   saveAdminCredentialsToCloud,
-  subscribeToAdminCredentials
+  subscribeToAdminCredentials,
+  getAdminCredentialsFromCloud,
+  forceLogoutAllDevicesInCloud,
+  MASTER_ADMIN_USERNAME,
+  MASTER_ADMIN_EMAIL,
+  MASTER_ADMIN_PASSWORD,
+  MASTER_ADMIN_SESSION_RESET_VERSION
 } from '../lib/firebase';
 
 interface AdminPanelProps {
@@ -84,27 +91,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'analytics' | 'mcqs' | 'payments' | 'import' | 'categories' | 'ads' | 'security' | 'settings' | 'backup'>('analytics');
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Admin Login Authentication State
+  // Admin Login Authentication State with Global Forced Logout
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
+      const storedVersion = localStorage.getItem('futureacademy_admin_session_version');
+      // If version is missing or old, purge immediately and force logout!
+      if (!storedVersion || storedVersion !== MASTER_ADMIN_SESSION_RESET_VERSION) {
+        localStorage.removeItem('futureacademy_admin_auth');
+        localStorage.removeItem('pakmcqs_admin_auth');
+        localStorage.removeItem('futureacademy_admin_pass');
+        localStorage.removeItem('futureacademy_admin_user');
+        localStorage.removeItem('futureacademy_admin_email');
+        localStorage.removeItem('pakmcqs_admin_user');
+        localStorage.removeItem('pakmcqs_admin_email');
+        localStorage.setItem('futureacademy_admin_session_version', MASTER_ADMIN_SESSION_RESET_VERSION);
+        return false;
+      }
       return localStorage.getItem('futureacademy_admin_auth') === 'true';
     }
     return false;
   });
-  const [adminUser, setAdminUser] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const u = localStorage.getItem('futureacademy_admin_user');
-      if (u && u !== 'admin') return u;
-    }
-    return 'nadeemali1419';
-  });
-  const [adminEmail, setAdminEmail] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const e = localStorage.getItem('futureacademy_admin_email');
-      if (e && !e.includes('admin@futureacademypro.com')) return e;
-    }
-    return 'nadeem.poet22@gmail.com';
-  });
+  const [adminUser, setAdminUser] = useState<string>(MASTER_ADMIN_USERNAME);
+  const [adminEmail, setAdminEmail] = useState<string>(MASTER_ADMIN_EMAIL);
 
   // Certificate Payments Management State
   const [payments, setPayments] = useState<CertificatePaymentSubmission[]>([]);
@@ -115,6 +123,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [preapproveNoteInput, setPreapproveNoteInput] = useState('');
   const [preapproveMsg, setPreapproveMsg] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  // Active Local MCQ Pool for instantaneous UI reactivity and category count updates
+  const [localMcqs, setLocalMcqs] = useState<MCQ[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('futureacademy_mcqs');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return mcqs || [];
+  });
+
+  // Keep localMcqs in sync whenever parent mcqs prop updates
+  useEffect(() => {
+    if (mcqs && mcqs.length > 0) {
+      setLocalMcqs(prev => {
+        if (mcqs.length !== prev.length) return mcqs;
+        return prev;
+      });
+    }
+  }, [mcqs]);
+
+  // Live real-time category counts: dynamically calculated from current MCQ pool
+  const liveCategories = useMemo(() => {
+    return enrichCategoriesWithLiveCounts(categories, localMcqs);
+  }, [categories, localMcqs]);
 
   // Cross-Device Real-Time Sync Broadcast State
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -274,6 +311,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [showCredNewPass, setShowCredNewPass] = useState(false);
   const [credStatus, setCredStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [credLoading, setCredLoading] = useState(false);
+  const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
+  const [forceLogoutSuccess, setForceLogoutSuccess] = useState('');
 
   // MCQ Form Modal State
   const [showMcqModal, setShowMcqModal] = useState(false);
@@ -339,25 +378,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [initialCategoryForMcq]);
 
-  // Cleanup stale legacy credentials in client localStorage
+  // Purge any legacy credentials from client localStorage
   useEffect(() => {
     try {
-      const pass = localStorage.getItem('futureacademy_admin_pass');
-      if (pass === 'admin') {
-        localStorage.setItem('futureacademy_admin_pass', 'nadeemali001#');
-      }
+      localStorage.removeItem('futureacademy_admin_pass');
+      localStorage.removeItem('pakmcqs_admin_auth');
+      localStorage.removeItem('pakmcqs_admin_user');
+      localStorage.removeItem('pakmcqs_admin_email');
       const u = localStorage.getItem('futureacademy_admin_user');
       if (u === 'admin') {
-        localStorage.setItem('futureacademy_admin_user', 'nadeemali1419');
+        localStorage.setItem('futureacademy_admin_user', MASTER_ADMIN_USERNAME);
       }
       const em = localStorage.getItem('futureacademy_admin_email');
       if (em === 'admin@futureacademypro.com') {
-        localStorage.setItem('futureacademy_admin_email', 'nadeem.poet22@gmail.com');
+        localStorage.setItem('futureacademy_admin_email', MASTER_ADMIN_EMAIL);
       }
     } catch {}
   }, []);
 
-  // Load latest admin credential info from server
+  // Load latest admin credential info from server if available
   useEffect(() => {
     fetch('/api/admin/credentials-info')
       .then(res => res.json())
@@ -365,43 +404,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         if (data.username && data.username !== 'admin') {
           setAdminUser(data.username);
           setCredUsername(data.username);
-          try {
-            localStorage.setItem('futureacademy_admin_user', data.username);
-          } catch {}
         }
         if (data.email && !data.email.includes('admin@futureacademypro.com')) {
           setAdminEmail(data.email);
           setCredEmail(data.email);
-          try {
-            localStorage.setItem('futureacademy_admin_email', data.email);
-          } catch {}
         }
       })
       .catch(() => {});
   }, []);
 
-  // Real-time listener for universal Admin Credentials across all devices via Cloud Firestore
+  // Real-time listener for universal Admin Credentials & Global Force Logout across all devices
   useEffect(() => {
     const unsub = subscribeToAdminCredentials((cloudCreds) => {
       if (cloudCreds) {
         if (cloudCreds.username && cloudCreds.username !== 'admin') {
           setAdminUser(cloudCreds.username);
           setCredUsername(cloudCreds.username);
-          try {
-            localStorage.setItem('futureacademy_admin_user', cloudCreds.username);
-          } catch {}
         }
         if (cloudCreds.email && !cloudCreds.email.includes('admin@futureacademypro.com')) {
           setAdminEmail(cloudCreds.email);
           setCredEmail(cloudCreds.email);
-          try {
-            localStorage.setItem('futureacademy_admin_email', cloudCreds.email);
-          } catch {}
         }
-        if (cloudCreds.password && cloudCreds.password !== 'admin') {
-          try {
-            localStorage.setItem('futureacademy_admin_pass', cloudCreds.password);
-          } catch {}
+
+        // Global Forced Logout Check:
+        // If sessionVersion in Cloud changes and doesn't match our local session version, log out immediately!
+        if (cloudCreds.sessionVersion) {
+          const localVer = localStorage.getItem('futureacademy_admin_session_version');
+          if (localVer && localVer !== cloudCreds.sessionVersion) {
+            setIsAdminLoggedIn(false);
+            localStorage.removeItem('futureacademy_admin_auth');
+            localStorage.removeItem('pakmcqs_admin_auth');
+            localStorage.removeItem('futureacademy_admin_pass');
+            localStorage.setItem('futureacademy_admin_session_version', cloudCreds.sessionVersion);
+            setLoginError('Tamam devices se admin session logout kar diya gaya hai. Baraye meharbani naye authorized credentials se dobara login karein.');
+          }
         }
       }
     });
@@ -411,21 +447,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-    if (!loginUsername.trim() || !loginPassword.trim()) {
+    const inputUser = loginUsername.trim();
+    const inputPass = loginPassword.trim();
+
+    if (!inputUser || !inputPass) {
       setLoginError('Baraye meharbani Username/Email aur Password dono darj karein.');
       return;
     }
 
     setLoginLoading(true);
+    let authenticated = false;
+    let authUser = MASTER_ADMIN_USERNAME;
+    let authEmail = MASTER_ADMIN_EMAIL;
     let serverResponded = false;
 
+    // 1. Try Node.js server API (if running Express server)
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          usernameOrEmail: loginUsername.trim(),
-          password: loginPassword.trim()
+          usernameOrEmail: inputUser,
+          password: inputPass
         })
       });
 
@@ -434,65 +477,75 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         serverResponded = true;
         const data = await res.json();
         if (res.ok && data.success) {
-          setIsAdminLoggedIn(true);
-          setAdminUser(data.user.username);
-          setAdminEmail(data.user.email);
-          setCredUsername(data.user.username);
-          setCredEmail(data.user.email);
-          localStorage.setItem('futureacademy_admin_auth', 'true');
-          localStorage.setItem('futureacademy_admin_user', data.user.username);
-          localStorage.setItem('futureacademy_admin_email', data.user.email);
-          localStorage.setItem('futureacademy_admin_pass', loginPassword.trim());
-          setLoginPassword('');
-          setLoginError('');
-          setLoginLoading(false);
-          return;
+          authenticated = true;
+          authUser = data.user.username;
+          authEmail = data.user.email;
         } else {
-          // Server specifically rejected credentials (401 status or invalid login)
-          setLoginError(data.error || 'Ghalat credentials! Baraye meharbani durust Username ya Password darj karein.');
+          setLoginError(data.error || 'Ghalat credentials! Purana username aur password khatam kar diya gaya hai.');
           setLoginLoading(false);
           return;
         }
       }
     } catch {
-      // Offline fallback only when server cannot be reached at all
+      // Backend not running (e.g. Vercel static SPA hosting)
     }
 
-    // Client-side fallback check (only for offline use if server is completely unreachable)
+    // 2. Vercel Static SPA / Client-Side Cloud Firestore validation
     if (!serverResponded) {
-      const rawStoredPass = localStorage.getItem('futureacademy_admin_pass');
-      const storedPass = (rawStoredPass && rawStoredPass !== 'admin') ? rawStoredPass : 'nadeemali001#';
-      const rawStoredUser = localStorage.getItem('futureacademy_admin_user');
-      const storedUser = (rawStoredUser && rawStoredUser !== 'admin') ? rawStoredUser : 'nadeemali1419';
-      const rawStoredEmail = localStorage.getItem('futureacademy_admin_email');
-      const storedEmail = (rawStoredEmail && !rawStoredEmail.includes('admin@futureacademypro.com')) ? rawStoredEmail : 'nadeem.poet22@gmail.com';
-      const input = loginUsername.trim().toLowerCase();
+      try {
+        const cloudCreds = await getAdminCredentialsFromCloud();
+        const validUser = cloudCreds?.username || MASTER_ADMIN_USERNAME;
+        const validEmail = cloudCreds?.email || MASTER_ADMIN_EMAIL;
+        const validPass = cloudCreds?.password || MASTER_ADMIN_PASSWORD;
 
-      const isUserMatch =
-        input === storedUser.toLowerCase() ||
-        input === storedEmail.toLowerCase() ||
-        input === 'nadeemali1419' ||
-        input === 'nadeem.poet22@gmail.com';
+        const isUserValid =
+          inputUser.toLowerCase() === validUser.toLowerCase() ||
+          inputUser.toLowerCase() === validEmail.toLowerCase() ||
+          inputUser.toLowerCase() === MASTER_ADMIN_USERNAME.toLowerCase() ||
+          inputUser.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
 
-      const isPassMatch =
-        loginPassword.trim() === storedPass ||
-        loginPassword.trim() === 'nadeemali001#';
+        const isPassValid =
+          inputPass === validPass ||
+          inputPass === MASTER_ADMIN_PASSWORD;
 
-      if (isUserMatch && isPassMatch) {
-        setIsAdminLoggedIn(true);
-        setAdminUser(storedUser);
-        setAdminEmail(storedEmail);
-        setCredUsername(storedUser);
-        setCredEmail(storedEmail);
-        localStorage.setItem('futureacademy_admin_auth', 'true');
-        localStorage.setItem('futureacademy_admin_user', storedUser);
-        localStorage.setItem('futureacademy_admin_email', storedEmail);
-        localStorage.setItem('futureacademy_admin_pass', storedPass);
-        setLoginPassword('');
-        setLoginError('');
-      } else {
-        setLoginError('Ghalat credentials! Baraye meharbani durust Username ya Password darj karein.');
+        if (isUserValid && isPassValid) {
+          authenticated = true;
+          authUser = validUser;
+          authEmail = validEmail;
+        }
+      } catch (err) {
+        console.warn('Direct Firestore credentials fetch fallback:', err);
+        // Strict Master Credentials check
+        const isUserValid =
+          inputUser.toLowerCase() === MASTER_ADMIN_USERNAME.toLowerCase() ||
+          inputUser.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+        const isPassValid = inputPass === MASTER_ADMIN_PASSWORD;
+
+        if (isUserValid && isPassValid) {
+          authenticated = true;
+          authUser = MASTER_ADMIN_USERNAME;
+          authEmail = MASTER_ADMIN_EMAIL;
+        }
       }
+    }
+
+    if (authenticated) {
+      setIsAdminLoggedIn(true);
+      setAdminUser(authUser);
+      setAdminEmail(authEmail);
+      setCredUsername(authUser);
+      setCredEmail(authEmail);
+      localStorage.setItem('futureacademy_admin_auth', 'true');
+      localStorage.setItem('futureacademy_admin_user', authUser);
+      localStorage.setItem('futureacademy_admin_email', authEmail);
+      localStorage.setItem('futureacademy_admin_session_version', MASTER_ADMIN_SESSION_RESET_VERSION);
+      // Explicitly remove any old stored passwords so old credentials can NEVER be re-used!
+      localStorage.removeItem('futureacademy_admin_pass');
+      localStorage.removeItem('pakmcqs_admin_auth');
+      setLoginPassword('');
+      setLoginError('');
+    } else {
+      setLoginError('Ghalat credentials! Purana username aur password mukammal tor par khatam kar diya gaya hai. Sirf naye authorized credentials (nadeemali1419) se login karein.');
     }
     setLoginLoading(false);
   };
@@ -501,8 +554,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setIsAdminLoggedIn(false);
     localStorage.removeItem('futureacademy_admin_auth');
     localStorage.removeItem('pakmcqs_admin_auth');
+    localStorage.removeItem('futureacademy_admin_pass');
     setLoginPassword('');
     setLoginError('');
+  };
+
+  const handleForceLogoutAll = async () => {
+    if (!window.confirm('Kya aap waqai tamam devices aur browsers se Admin Panel ko foran logout karna chahte hain? Tamam devices par naye password se dobara login karna hoga.')) {
+      return;
+    }
+    setForceLogoutLoading(true);
+    try {
+      const newVersion = await forceLogoutAllDevicesInCloud();
+      localStorage.setItem('futureacademy_admin_session_version', newVersion);
+      setForceLogoutSuccess('Tamam devices aur browsers se admin panel kamyabi se logout kar diya gaya hai!');
+      setTimeout(() => setForceLogoutSuccess(''), 6000);
+    } catch {
+      setForceLogoutSuccess('Logout signal tamam devices ko bhej diya gaya hai.');
+      setTimeout(() => setForceLogoutSuccess(''), 6000);
+    } finally {
+      setForceLogoutLoading(false);
+    }
   };
 
   const handleChangeCredentials = async (e: React.FormEvent) => {
@@ -543,36 +615,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           setAdminEmail(data.user.email);
           localStorage.setItem('futureacademy_admin_user', data.user.username);
           localStorage.setItem('futureacademy_admin_email', data.user.email);
-          if (credNewPass.trim()) {
-            localStorage.setItem('futureacademy_admin_pass', credNewPass.trim());
-          }
         }
       }
     } catch {
       // Offline / client fallback
     }
 
-    // Always update client-side storage as well for offline/Vercel resilience
-    const rawStoredPass = localStorage.getItem('futureacademy_admin_pass');
-    const currentStoredPass = (rawStoredPass && rawStoredPass !== 'admin') ? rawStoredPass : 'nadeemali001#';
+    // Verify current password against master password or Cloud Firestore
+    let passwordVerified = updatedOnServer || credCurrentPass === MASTER_ADMIN_PASSWORD;
+    if (!passwordVerified) {
+      try {
+        const cloudCreds = await getAdminCredentialsFromCloud();
+        if (cloudCreds?.password && credCurrentPass === cloudCreds.password) {
+          passwordVerified = true;
+        }
+      } catch {}
+    }
 
-    if (updatedOnServer || credCurrentPass === currentStoredPass || credCurrentPass === 'nadeemali001#') {
+    if (passwordVerified) {
       const nextUser = credUsername.trim() || adminUser;
       const nextEmail = credEmail.trim() || adminEmail;
       setAdminUser(nextUser);
       setAdminEmail(nextEmail);
       localStorage.setItem('futureacademy_admin_user', nextUser);
       localStorage.setItem('futureacademy_admin_email', nextEmail);
-      if (credNewPass.trim()) {
-        localStorage.setItem('futureacademy_admin_pass', credNewPass.trim());
-      }
+      localStorage.removeItem('futureacademy_admin_pass');
 
       // Sync across all devices and mobiles via Cloud Firestore
       try {
         await saveAdminCredentialsToCloud({
           username: nextUser,
           email: nextEmail,
-          password: credNewPass.trim() || currentStoredPass
+          password: credNewPass.trim() || MASTER_ADMIN_PASSWORD
         });
       } catch (cloudErr) {
         console.warn('Could not sync admin credentials to Cloud Firestore:', cloudErr);
@@ -676,11 +750,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         currentLocalMcqs = [targetMcqToSave, ...currentLocalMcqs];
       }
       localStorage.setItem('futureacademy_mcqs', JSON.stringify(currentLocalMcqs));
+      setLocalMcqs(currentLocalMcqs);
       if (onUpdateAllMcqs) {
         onUpdateAllMcqs(currentLocalMcqs);
       }
       // Save directly to Cloud Firestore so all mobiles & PCs update instantly
       await saveMcqToCloud(targetMcqToSave);
+
+      // Instantly update category question counts and sync to Cloud
+      const updatedLiveCats = enrichCategoriesWithLiveCounts(categories, currentLocalMcqs);
+      try {
+        localStorage.setItem('futureacademy_categories', JSON.stringify(updatedLiveCats));
+        await saveCategoriesToCloud(updatedLiveCats);
+      } catch (catErr) {
+        console.warn('Category sync warning:', catErr);
+      }
     } catch (err) {
       console.warn('Sync error:', err);
     }
@@ -711,9 +795,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           const list: MCQ[] = JSON.parse(saved);
           const updatedList = list.filter(m => m.id !== id);
           localStorage.setItem('futureacademy_mcqs', JSON.stringify(updatedList));
+          setLocalMcqs(updatedList);
           if (onUpdateAllMcqs) {
             onUpdateAllMcqs(updatedList);
           }
+          const updatedLiveCats = enrichCategoriesWithLiveCounts(categories, updatedList);
+          try {
+            localStorage.setItem('futureacademy_categories', JSON.stringify(updatedLiveCats));
+            await saveCategoriesToCloud(updatedLiveCats);
+          } catch {}
         }
       } catch {}
 
@@ -863,9 +953,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }));
       currentLocal = [...converted, ...currentLocal];
       localStorage.setItem('futureacademy_mcqs', JSON.stringify(currentLocal));
+      setLocalMcqs(currentLocal);
       if (onUpdateAllMcqs) {
         onUpdateAllMcqs(currentLocal);
       }
+
+      // Update category question counts and push to Cloud Firestore
+      const updatedLiveCats = enrichCategoriesWithLiveCounts(categories, currentLocal);
+      try {
+        localStorage.setItem('futureacademy_categories', JSON.stringify(updatedLiveCats));
+        await saveCategoriesToCloud(updatedLiveCats);
+      } catch {}
 
       // Push all imported questions to Cloud Firestore so every device syncs
       try {
@@ -1022,8 +1120,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     a.click();
   };
 
-  const filteredAdminMcqs = mcqs.filter(m => {
-    const matchCat = adminCatFilter === 'All' || m.category.toLowerCase() === adminCatFilter.toLowerCase();
+  const filteredAdminMcqs = localMcqs.filter(m => {
+    const matchCat = adminCatFilter === 'All' || isMcqInCategory(m, adminCatFilter);
     const matchSearch =
       m.question.toLowerCase().includes(adminSearch.toLowerCase()) ||
       m.category.toLowerCase().includes(adminSearch.toLowerCase());
@@ -1255,7 +1353,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               title="Push all questions, categories, and settings from this device to Firebase Cloud Firestore"
             >
               <CloudUpload className={`w-3.5 h-3.5 ${isCloudSyncing ? 'animate-bounce' : ''}`} />
-              <span>{cloudSyncMsg || `☁️ Sync All ${mcqs.length} MCQs to Cloud`}</span>
+              <span>{cloudSyncMsg || `☁️ Sync All ${localMcqs.length} MCQs to Cloud`}</span>
             </button>
 
             <button
@@ -1293,7 +1391,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          <Layers className="w-4 h-4" /> Manage MCQs ({mcqs.length})
+          <Layers className="w-4 h-4" /> Manage MCQs ({localMcqs.length})
         </button>
 
         <button
@@ -1315,7 +1413,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          <Plus className="w-4 h-4" /> Categories ({categories.length})
+          <Plus className="w-4 h-4" /> Categories ({liveCategories.length})
         </button>
 
         <button
@@ -1385,13 +1483,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <span className="text-[10px] uppercase font-bold text-slate-400">Total MCQs</span>
             <span className="text-2xl font-black text-slate-900 dark:text-white block mt-1">
-              {mcqs.length}
+              {localMcqs.length}
             </span>
           </div>
           <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <span className="text-[10px] uppercase font-bold text-slate-400">Total Categories</span>
             <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 block mt-1">
-              {categories.length}
+              {liveCategories.length}
             </span>
           </div>
           <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
@@ -1417,14 +1515,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="text-[11px] font-normal text-slate-400">Click any category button below to open builder for that category</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {categories.map(c => (
+              {liveCategories.map(c => (
                 <button
                   key={c.id}
                   onClick={() => openAddMcqModal(c.name)}
                   className="bg-white dark:bg-slate-900 hover:bg-emerald-600 dark:hover:bg-emerald-600 hover:text-white dark:hover:text-white border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs"
                 >
                   <Plus className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>{c.name}</span>
+                  <span>{c.name} ({c.questionCount})</span>
                 </button>
               ))}
             </div>
@@ -1447,10 +1545,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               onChange={e => setAdminCatFilter(e.target.value)}
               className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
             >
-              <option value="All">All Categories</option>
-              {categories.map(c => (
+              <option value="All">All Categories ({localMcqs.length})</option>
+              {liveCategories.map(c => (
                 <option key={c.id} value={c.name}>
-                  {c.name}
+                  {c.name} ({c.questionCount})
                 </option>
               ))}
             </select>
@@ -1580,7 +1678,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     📁 Keep Category Specified in File (Auto-Detect Individual Categories)
                   </option>
                   <optgroup label="Assign ALL questions in batch to a specific category:">
-                    {categories.map(c => (
+                    {liveCategories.map(c => (
                       <option key={c.id} value={c.name}>
                         📂 {c.name} ({c.questionCount} current MCQs)
                       </option>
@@ -2031,7 +2129,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  All Subject Categories ({categories.length})
+                  All Subject Categories ({liveCategories.length})
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Click "+ Add MCQ" on any category card to open builder pre-filled for that subject.
@@ -2040,7 +2138,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {categories.map(c => (
+              {liveCategories.map(c => (
                 <div
                   key={c.id}
                   className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-4 hover:border-emerald-500/40 transition"
@@ -2943,6 +3041,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
             </form>
           </div>
+
+          {/* Global Device Logout & Session Revocation */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-950/60 p-6 sm:p-8 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                  <LogOut className="w-4 h-4" /> Sare Devices se Admin Logout Karein (Global Force Logout)
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">
+                  Agar kisi mobile, PC ya browser par purana session khula reh gaya hai, to is button ko dabayein. Yeh Cloud Firestore ke zariye tamam devices ko foran logout kar dega aur sabko naye credentials (nadeemali1419 / nadeemali001#) se login karna hoga.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleForceLogoutAll}
+                disabled={forceLogoutLoading}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition flex items-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                {forceLogoutLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Logging Out All...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-4 h-4" />
+                    <span>Logout All Devices</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {forceLogoutSuccess && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{forceLogoutSuccess}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -3023,7 +3160,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     onChange={e => setSelectedCat(e.target.value)}
                     className="w-full p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                   >
-                    {categories.map(c => (
+                    {liveCategories.map(c => (
                       <option key={c.id} value={c.name}>
                         {c.name} ({c.questionCount} MCQs)
                       </option>
