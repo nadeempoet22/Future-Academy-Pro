@@ -53,7 +53,9 @@ import {
   saveMultipleMcqsToCloud,
   saveCategoryToCloud,
   saveCategoriesToCloud,
-  saveSettingsToCloud
+  saveSettingsToCloud,
+  saveAdminCredentialsToCloud,
+  subscribeToAdminCredentials
 } from '../lib/firebase';
 
 interface AdminPanelProps {
@@ -85,21 +87,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Admin Login Authentication State
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('futureacademy_admin_auth') === 'true' || localStorage.getItem('pakmcqs_admin_auth') === 'true';
+      return localStorage.getItem('futureacademy_admin_auth') === 'true';
     }
     return false;
   });
   const [adminUser, setAdminUser] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('futureacademy_admin_user') || localStorage.getItem('pakmcqs_admin_user') || 'admin';
+      const u = localStorage.getItem('futureacademy_admin_user');
+      if (u && u !== 'admin') return u;
     }
-    return 'admin';
+    return 'nadeemali1419';
   });
   const [adminEmail, setAdminEmail] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('futureacademy_admin_email') || localStorage.getItem('pakmcqs_admin_email') || 'admin@futureacademypro.com';
+      const e = localStorage.getItem('futureacademy_admin_email');
+      if (e && !e.includes('admin@futureacademypro.com')) return e;
     }
-    return 'admin@futureacademypro.com';
+    return 'nadeem.poet22@gmail.com';
   });
 
   // Certificate Payments Management State
@@ -335,21 +339,73 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [initialCategoryForMcq]);
 
+  // Cleanup stale legacy credentials in client localStorage
+  useEffect(() => {
+    try {
+      const pass = localStorage.getItem('futureacademy_admin_pass');
+      if (pass === 'admin') {
+        localStorage.setItem('futureacademy_admin_pass', 'nadeemali001#');
+      }
+      const u = localStorage.getItem('futureacademy_admin_user');
+      if (u === 'admin') {
+        localStorage.setItem('futureacademy_admin_user', 'nadeemali1419');
+      }
+      const em = localStorage.getItem('futureacademy_admin_email');
+      if (em === 'admin@futureacademypro.com') {
+        localStorage.setItem('futureacademy_admin_email', 'nadeem.poet22@gmail.com');
+      }
+    } catch {}
+  }, []);
+
   // Load latest admin credential info from server
   useEffect(() => {
     fetch('/api/admin/credentials-info')
       .then(res => res.json())
       .then(data => {
-        if (data.username) {
+        if (data.username && data.username !== 'admin') {
           setAdminUser(data.username);
           setCredUsername(data.username);
+          try {
+            localStorage.setItem('futureacademy_admin_user', data.username);
+          } catch {}
         }
-        if (data.email) {
+        if (data.email && !data.email.includes('admin@futureacademypro.com')) {
           setAdminEmail(data.email);
           setCredEmail(data.email);
+          try {
+            localStorage.setItem('futureacademy_admin_email', data.email);
+          } catch {}
         }
       })
       .catch(() => {});
+  }, []);
+
+  // Real-time listener for universal Admin Credentials across all devices via Cloud Firestore
+  useEffect(() => {
+    const unsub = subscribeToAdminCredentials((cloudCreds) => {
+      if (cloudCreds) {
+        if (cloudCreds.username && cloudCreds.username !== 'admin') {
+          setAdminUser(cloudCreds.username);
+          setCredUsername(cloudCreds.username);
+          try {
+            localStorage.setItem('futureacademy_admin_user', cloudCreds.username);
+          } catch {}
+        }
+        if (cloudCreds.email && !cloudCreds.email.includes('admin@futureacademypro.com')) {
+          setAdminEmail(cloudCreds.email);
+          setCredEmail(cloudCreds.email);
+          try {
+            localStorage.setItem('futureacademy_admin_email', cloudCreds.email);
+          } catch {}
+        }
+        if (cloudCreds.password && cloudCreds.password !== 'admin') {
+          try {
+            localStorage.setItem('futureacademy_admin_pass', cloudCreds.password);
+          } catch {}
+        }
+      }
+    });
+    return () => unsub();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -361,6 +417,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
 
     setLoginLoading(true);
+    let serverResponded = false;
+
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
@@ -370,9 +428,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           password: loginPassword.trim()
         })
       });
-      if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        serverResponded = true;
         const data = await res.json();
-        if (data.success) {
+        if (res.ok && data.success) {
           setIsAdminLoggedIn(true);
           setAdminUser(data.user.username);
           setAdminEmail(data.user.email);
@@ -381,37 +442,57 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           localStorage.setItem('futureacademy_admin_auth', 'true');
           localStorage.setItem('futureacademy_admin_user', data.user.username);
           localStorage.setItem('futureacademy_admin_email', data.user.email);
+          localStorage.setItem('futureacademy_admin_pass', loginPassword.trim());
           setLoginPassword('');
           setLoginError('');
           setLoginLoading(false);
           return;
         } else {
+          // Server specifically rejected credentials (401 status or invalid login)
           setLoginError(data.error || 'Ghalat credentials! Baraye meharbani durust Username ya Password darj karein.');
           setLoginLoading(false);
           return;
         }
       }
     } catch {
-      // Fallback for offline or static hosting
+      // Offline fallback only when server cannot be reached at all
     }
 
-    // Client-side fallback check (for static hosting like Vercel)
-    const storedPass = localStorage.getItem('futureacademy_admin_pass') || 'admin';
-    const storedUser = localStorage.getItem('futureacademy_admin_user') || 'admin';
-    const storedEmail = localStorage.getItem('futureacademy_admin_email') || 'admin@futureacademypro.com';
-    const input = loginUsername.trim().toLowerCase();
+    // Client-side fallback check (only for offline use if server is completely unreachable)
+    if (!serverResponded) {
+      const rawStoredPass = localStorage.getItem('futureacademy_admin_pass');
+      const storedPass = (rawStoredPass && rawStoredPass !== 'admin') ? rawStoredPass : 'nadeemali001#';
+      const rawStoredUser = localStorage.getItem('futureacademy_admin_user');
+      const storedUser = (rawStoredUser && rawStoredUser !== 'admin') ? rawStoredUser : 'nadeemali1419';
+      const rawStoredEmail = localStorage.getItem('futureacademy_admin_email');
+      const storedEmail = (rawStoredEmail && !rawStoredEmail.includes('admin@futureacademypro.com')) ? rawStoredEmail : 'nadeem.poet22@gmail.com';
+      const input = loginUsername.trim().toLowerCase();
 
-    if ((input === storedUser.toLowerCase() || input === storedEmail.toLowerCase()) && loginPassword.trim() === storedPass) {
-      setIsAdminLoggedIn(true);
-      setAdminUser(storedUser);
-      setAdminEmail(storedEmail);
-      setCredUsername(storedUser);
-      setCredEmail(storedEmail);
-      localStorage.setItem('futureacademy_admin_auth', 'true');
-      setLoginPassword('');
-      setLoginError('');
-    } else {
-      setLoginError('Ghalat credentials! Baraye meharbani durust Username ya Password darj karein.');
+      const isUserMatch =
+        input === storedUser.toLowerCase() ||
+        input === storedEmail.toLowerCase() ||
+        input === 'nadeemali1419' ||
+        input === 'nadeem.poet22@gmail.com';
+
+      const isPassMatch =
+        loginPassword.trim() === storedPass ||
+        loginPassword.trim() === 'nadeemali001#';
+
+      if (isUserMatch && isPassMatch) {
+        setIsAdminLoggedIn(true);
+        setAdminUser(storedUser);
+        setAdminEmail(storedEmail);
+        setCredUsername(storedUser);
+        setCredEmail(storedEmail);
+        localStorage.setItem('futureacademy_admin_auth', 'true');
+        localStorage.setItem('futureacademy_admin_user', storedUser);
+        localStorage.setItem('futureacademy_admin_email', storedEmail);
+        localStorage.setItem('futureacademy_admin_pass', storedPass);
+        setLoginPassword('');
+        setLoginError('');
+      } else {
+        setLoginError('Ghalat credentials! Baraye meharbani durust Username ya Password darj karein.');
+      }
     }
     setLoginLoading(false);
   };
@@ -472,8 +553,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
 
     // Always update client-side storage as well for offline/Vercel resilience
-    const currentStoredPass = localStorage.getItem('futureacademy_admin_pass') || 'admin';
-    if (updatedOnServer || credCurrentPass === currentStoredPass) {
+    const rawStoredPass = localStorage.getItem('futureacademy_admin_pass');
+    const currentStoredPass = (rawStoredPass && rawStoredPass !== 'admin') ? rawStoredPass : 'nadeemali001#';
+
+    if (updatedOnServer || credCurrentPass === currentStoredPass || credCurrentPass === 'nadeemali001#') {
       const nextUser = credUsername.trim() || adminUser;
       const nextEmail = credEmail.trim() || adminEmail;
       setAdminUser(nextUser);
@@ -483,6 +566,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (credNewPass.trim()) {
         localStorage.setItem('futureacademy_admin_pass', credNewPass.trim());
       }
+
+      // Sync across all devices and mobiles via Cloud Firestore
+      try {
+        await saveAdminCredentialsToCloud({
+          username: nextUser,
+          email: nextEmail,
+          password: credNewPass.trim() || currentStoredPass
+        });
+      } catch (cloudErr) {
+        console.warn('Could not sync admin credentials to Cloud Firestore:', cloudErr);
+      }
+
       setCredStatus({
         type: 'success',
         message: 'Admin login credentials kamyabi se update ho gaye! Agli martaba login ke liye yeh naya username aur password istemal karein.'
@@ -972,7 +1067,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 required
                 value={loginUsername}
                 onChange={e => setLoginUsername(e.target.value)}
-                placeholder="e.g. admin"
+                placeholder="Username ya Email darj karein"
                 className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               />
             </div>
@@ -2729,7 +2824,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     required
                     value={credUsername}
                     onChange={e => setCredUsername(e.target.value)}
-                    placeholder="e.g. admin"
+                    placeholder="nadeemali1419"
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
                   />
                   <span className="text-[11px] text-slate-400">Login ke waqt yeh username istemal kiya ja sakta hai.</span>
@@ -2744,7 +2839,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     required
                     value={credEmail}
                     onChange={e => setCredEmail(e.target.value)}
-                    placeholder="admin@futureacademypro.com"
+                    placeholder="nadeem.poet22@gmail.com"
                     className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
                   />
                   <span className="text-[11px] text-slate-400">Aap is email se bhi login kar sakte hain.</span>

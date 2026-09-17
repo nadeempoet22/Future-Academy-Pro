@@ -47,11 +47,11 @@ let reports: { id: string; mcqId: string; reason: string; createdAt: string }[] 
 let certificatePayments: CertificatePaymentSubmission[] = [];
 let preapprovedTids: Set<string> = new Set<string>();
 
-// Admin Authentication Store (Default credentials: admin / admin)
+// Admin Authentication Store (Universal Master Credentials: nadeemali1419 / nadeemali001#)
 let adminCredentials = {
-  username: 'admin',
-  email: 'admin@futureacademypro.com',
-  password: 'admin',
+  username: 'nadeemali1419',
+  email: 'nadeem.poet22@gmail.com',
+  password: 'nadeemali001#',
   updatedAt: new Date().toISOString()
 };
 
@@ -99,7 +99,22 @@ function loadDatabase() {
       if (Array.isArray(data.reports)) reports = data.reports;
       if (Array.isArray(data.certificatePayments)) certificatePayments = data.certificatePayments;
       if (Array.isArray(data.preapprovedTids)) preapprovedTids = new Set(data.preapprovedTids);
-      if (data.adminCredentials) adminCredentials = data.adminCredentials;
+      if (data.adminCredentials) {
+        // Automatically migrate legacy default credentials to the requested master admin
+        if (data.adminCredentials.username === 'admin' && data.adminCredentials.password === 'admin') {
+          adminCredentials = {
+            username: 'nadeemali1419',
+            email: 'nadeem.poet22@gmail.com',
+            password: 'nadeemali001#',
+            updatedAt: new Date().toISOString()
+          };
+          saveDatabase();
+        } else {
+          adminCredentials = data.adminCredentials;
+        }
+      } else {
+        saveDatabase();
+      }
       console.log(`[Database Loaded] ${mcqs.length} MCQs, ${categories.length} Categories, Sync Version: ${syncMeta.version}`);
     } else {
       saveDatabase();

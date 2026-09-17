@@ -33,5 +33,10 @@ service cloud.firestore {
     match /blogPosts/{postId} {
       allow read, write: if true;
     }
+
+    // Admin credentials for cross-device authentication synchronization
+    match /adminAuth/{authId} {
+      allow read, write: if true;
+    }
   }
 }

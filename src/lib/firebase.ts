@@ -270,3 +270,63 @@ export function subscribeToCloudSettings(
     return () => {};
   }
 }
+
+export interface CloudAdminCredentials {
+  username: string;
+  email: string;
+  password?: string;
+  updatedAt: string;
+}
+
+/**
+ * Save Admin credentials to Cloud Firestore for cross-device synchronization
+ */
+export async function saveAdminCredentialsToCloud(creds: {
+  username: string;
+  email: string;
+  password?: string;
+}): Promise<boolean> {
+  const path = 'adminAuth/master';
+  try {
+    const payload: Record<string, any> = {
+      username: creds.username.trim(),
+      email: creds.email.trim(),
+      updatedAt: new Date().toISOString()
+    };
+    if (creds.password && creds.password.trim()) {
+      payload.password = creds.password.trim();
+    }
+    await setDoc(doc(db, 'adminAuth', 'master'), payload, { merge: true });
+    return true;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+    return false;
+  }
+}
+
+/**
+ * Real-time listener for Admin Credentials across all devices
+ */
+export function subscribeToAdminCredentials(
+  onUpdate: (creds: CloudAdminCredentials) => void
+): () => void {
+  const path = 'adminAuth/master';
+  try {
+    const unsubscribe = onSnapshot(
+      doc(db, 'adminAuth', 'master'),
+      (snap) => {
+        if (snap.exists()) {
+          onUpdate(snap.data() as CloudAdminCredentials);
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.GET, path);
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, path);
+    return () => {};
+  }
+}
+
