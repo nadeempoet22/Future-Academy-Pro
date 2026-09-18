@@ -247,7 +247,7 @@ async function startServer() {
     }
 
     return res.status(401).json({
-      error: 'Ghalat Username/Email ya Password. Sirf authorized credentials (Username: nadeemali1419, Password: nadeemali001#) se login karein.'
+      error: 'Ghalat Username/Email ya Password. Baraye meharbani durust credentials darj karein.'
     });
   });
 
