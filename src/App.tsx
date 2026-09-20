@@ -817,12 +817,11 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Android App & Quiz Action Row */}
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <PWAInstallButton variant="hero" />
+                  {/* Quiz Action */}
+                  <div className="pt-1">
                     <button
                       onClick={handleLaunchDailyQuiz}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer active:scale-95"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer active:scale-95"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                       <span>Take Practice Quiz</span>
@@ -1084,25 +1083,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Official Android App Card */}
-                <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 text-white p-6 border border-emerald-500/30 shadow-xl relative overflow-hidden">
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2.5 py-0.5 rounded-full">
-                      <Smartphone className="w-3.5 h-3.5" /> Android App
-                    </span>
-                    <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                      Live Auto-Sync
-                    </span>
-                  </div>
-                  <h3 className="text-base font-bold text-white mb-1.5">
-                    Install on Your Phone
-                  </h3>
-                  <p className="text-xs text-slate-300 mb-4 leading-relaxed">
-                    Website se aap jo bhi naya MCQ ya exam test add karenge, woh baghair kisi naye download ke app mein foran update ho jayega!
-                  </p>
-                  <PWAInstallButton variant="hero" className="w-full justify-center" />
-                </div>
 
                 {/* Categories List Widget */}
                 <div className="rounded-3xl bg-white dark:bg-slate-900 p-6 border border-slate-200/80 dark:border-slate-800">
@@ -1319,11 +1299,6 @@ export default function App() {
         </button>
       </aside>
 
-      {/* Floating Android App Install Badge */}
-      <PWAInstallButton 
-        variant="floating" 
-        className={activeTab === 'home' && totalPages > 1 ? 'bottom-16 sm:bottom-6 right-16 sm:right-20' : 'bottom-5 sm:bottom-6 right-16 sm:right-20'} 
-      />
 
       {/* Offline Connectivity Notification Indicator */}
       <OfflineIndicator />
