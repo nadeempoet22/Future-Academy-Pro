@@ -15,8 +15,10 @@ import {
   Volume2,
   FileText,
   Flame,
-  RefreshCw
+  RefreshCw,
+  Smartphone
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   settings: SiteSettings;
@@ -184,6 +186,9 @@ export const Header: React.FC<HeaderProps> = ({
             {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
           </button>
 
+          {/* Android App Button */}
+          <PWAInstallButton variant="navbar" />
+
           {/* Cross-device live sync button */}
           {onForceSync && (
             <button
@@ -261,6 +266,11 @@ export const Header: React.FC<HeaderProps> = ({
           >
             Exam Preparation Blog
           </button>
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <PWAInstallButton variant="hero" className="w-full justify-center" />
+          </div>
+
           {activeTab === 'admin' && (
             <button
               onClick={() => {
