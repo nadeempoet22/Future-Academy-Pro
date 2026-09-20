@@ -1196,6 +1196,33 @@ Output ONLY valid JSON array with format:
     res.redirect(301, '/favicon.svg');
   });
 
+  // Dedicated PWA & Service Worker endpoints with proper MIME types
+  app.get(['/sw.js', '/service-worker.js'], (req, res) => {
+    const swPath = path.join(process.cwd(), 'public', 'sw.js');
+    if (fs.existsSync(swPath)) {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      res.setHeader('Service-Worker-Allowed', '/');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.sendFile(swPath);
+    } else {
+      res.status(404).send('Service worker not found');
+    }
+  });
+
+  app.get(['/manifest.webmanifest', '/manifest.json'], (req, res) => {
+    const manifestPath = path.join(process.cwd(), 'public', 'manifest.webmanifest');
+    if (fs.existsSync(manifestPath)) {
+      res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.sendFile(manifestPath);
+    } else {
+      res.status(404).send('Manifest not found');
+    }
+  });
+
+  // Serve static assets from public folder directly
+  app.use(express.static(path.join(process.cwd(), 'public')));
+
   // Vite middleware for dev or static serving for prod
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

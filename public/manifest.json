@@ -1,0 +1,106 @@
+{
+  "id": "/",
+  "name": "Future Academy Pro - MCQs & Exam Prep",
+  "short_name": "FutureAcad",
+  "description": "Pakistan's premier platform for solved MCQs, mock tests, and exam preparation with real-time sync.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "orientation": "any",
+  "background_color": "#040d12",
+  "theme_color": "#059669",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": [
+    "education",
+    "books",
+    "reference",
+    "productivity"
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop-1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Future Academy Pro Desktop Exam Dashboard"
+    },
+    {
+      "src": "/screenshots/mobile-1.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Future Academy Pro Mobile Practice Quiz"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Daily Practice Quiz",
+      "short_name": "Daily Quiz",
+      "description": "Start FPSC & PPSC daily practice test with instant scoring",
+      "url": "/?quiz=daily",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Solved MCQs Bank",
+      "short_name": "MCQs",
+      "description": "Explore 50,000+ categorized solved MCQs",
+      "url": "/?tab=home",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Exam Preparation Blog",
+      "short_name": "Exam Blog",
+      "description": "Read latest FPSC, PPSC and CSS preparation tips",
+      "url": "/?tab=blog",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
