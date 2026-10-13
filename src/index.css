@@ -12,3 +12,17 @@ html:not(.dark),
 body:not(.dark) {
   color-scheme: light;
 }
+
+/* Google AdSense Styling & Unfilled Ad Graceful Handling */
+ins.adsbygoogle {
+  background: transparent !important;
+  color-scheme: light dark;
+}
+
+ins.adsbygoogle iframe {
+  background-color: transparent !important;
+}
+
+ins.adsbygoogle[data-ad-status="unfilled"] {
+  display: none !important;
+}

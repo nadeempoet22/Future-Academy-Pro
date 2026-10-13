@@ -66,6 +66,8 @@ export const AdBanner: React.FC<AdBannerProps> = ({ type, adConfig, className = 
 
   const formattedPubClient = formatAdClient(adConfig?.publisherId);
 
+  const [isUnfilled, setIsUnfilled] = useState(false);
+
   // Dynamically load AdSense script and push ads in Live Mode
   useEffect(() => {
     if (!isLiveMode || !formattedPubClient) return;
@@ -81,28 +83,60 @@ export const AdBanner: React.FC<AdBannerProps> = ({ type, adConfig, className = 
       }
 
       if (adRef.current && !pushedRef.current) {
-        (window.adsbygoogle = window.adsbygoogle || []).push({});
-        pushedRef.current = true;
+        const pushTimer = setTimeout(() => {
+          try {
+            if (adRef.current && !pushedRef.current) {
+              (window.adsbygoogle = window.adsbygoogle || []).push({});
+              pushedRef.current = true;
+            }
+          } catch (err) {
+            console.debug('[AdSense] Push notification:', err);
+          }
+        }, 150);
+        return () => clearTimeout(pushTimer);
       }
     } catch (err) {
       console.debug('[AdSense] Push notification:', err);
     }
   }, [isLiveMode, formattedPubClient, slotId]);
 
+  // Monitor unfilled ad status to collapse empty white boxes
+  useEffect(() => {
+    const el = adRef.current;
+    if (!el || !isLiveMode) return;
+
+    if (el.getAttribute('data-ad-status') === 'unfilled') {
+      setIsUnfilled(true);
+    }
+
+    const observer = new MutationObserver(() => {
+      if (el.getAttribute('data-ad-status') === 'unfilled') {
+        setIsUnfilled(true);
+      }
+    });
+
+    observer.observe(el, { attributes: true, attributeFilter: ['data-ad-status'] });
+    return () => observer.disconnect();
+  }, [isLiveMode]);
+
   // LIVE ADSENSE MODE (Real Earning Commercial Ads)
   if (isLiveMode) {
+    if (isUnfilled) {
+      return null; // Collapse cleanly without leaving an empty white void
+    }
+
     return (
-      <div className={`adsense-wrapper my-4 text-center overflow-hidden ${className}`}>
+      <div className={`adsense-wrapper my-3 text-center overflow-hidden transition-all duration-300 ${className}`}>
         <div className="flex items-center justify-center gap-1.5 mb-1 text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
           <span>Ad</span>
           <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
-          <span>Google AdSense (Live Earning)</span>
+          <span>Google AdSense</span>
         </div>
-        <div className="min-h-[90px] w-full flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/30 rounded-xl overflow-hidden">
+        <div className="w-full flex items-center justify-center bg-transparent rounded-xl overflow-hidden">
           <ins
             ref={adRef}
             className="adsbygoogle"
-            style={{ display: 'block', width: '100%' }}
+            style={{ display: 'block', width: '100%', background: 'transparent' }}
             data-ad-client={formattedPubClient}
             data-ad-slot={slotId || undefined}
             data-ad-format="auto"
