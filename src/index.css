@@ -23,6 +23,15 @@ ins.adsbygoogle iframe {
   background-color: transparent !important;
 }
 
-ins.adsbygoogle[data-ad-status="unfilled"] {
+ins.adsbygoogle[data-ad-status="unfilled"],
+ins.adsbygoogle[data-ad-status="unfilled"] * {
   display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.adsense-wrapper:not(:has(iframe)) {
+  min-height: 0 !important;
 }

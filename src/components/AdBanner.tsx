@@ -66,6 +66,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ type, adConfig, className = 
 
   const formattedPubClient = formatAdClient(adConfig?.publisherId);
 
+  const [isFilled, setIsFilled] = useState(false);
   const [isUnfilled, setIsUnfilled] = useState(false);
 
   // Dynamically load AdSense script and push ads in Live Mode
@@ -100,38 +101,73 @@ export const AdBanner: React.FC<AdBannerProps> = ({ type, adConfig, className = 
     }
   }, [isLiveMode, formattedPubClient, slotId]);
 
-  // Monitor unfilled ad status to collapse empty white boxes
+  // Monitor ad status to detect filled vs unfilled ads without flashing or layout shift
   useEffect(() => {
     const el = adRef.current;
     if (!el || !isLiveMode) return;
 
-    if (el.getAttribute('data-ad-status') === 'unfilled') {
-      setIsUnfilled(true);
-    }
+    const checkStatus = () => {
+      const status = el.getAttribute('data-ad-status');
+      if (status === 'unfilled') {
+        setIsUnfilled(true);
+        return;
+      }
+      if (status === 'filled') {
+        setIsFilled(true);
+        return;
+      }
+      // Check if AdSense injected an active iframe with non-zero dimensions
+      const iframe = el.querySelector('iframe');
+      if (iframe && (iframe.offsetHeight > 10 || iframe.clientHeight > 10)) {
+        setIsFilled(true);
+      }
+    };
+
+    checkStatus();
 
     const observer = new MutationObserver(() => {
-      if (el.getAttribute('data-ad-status') === 'unfilled') {
-        setIsUnfilled(true);
-      }
+      checkStatus();
     });
 
-    observer.observe(el, { attributes: true, attributeFilter: ['data-ad-status'] });
-    return () => observer.disconnect();
-  }, [isLiveMode]);
+    observer.observe(el, {
+      attributes: true,
+      attributeFilter: ['data-ad-status'],
+      childList: true,
+      subtree: true,
+    });
+
+    // Fallback: If after 3 seconds the ad hasn't filled (e.g. ad blocker active or pending review), collapse cleanly
+    const fallbackTimer = setTimeout(() => {
+      if (!isFilled && el.getAttribute('data-ad-status') !== 'filled') {
+        setIsUnfilled(true);
+      }
+    }, 3000);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(fallbackTimer);
+    };
+  }, [isLiveMode, isFilled]);
 
   // LIVE ADSENSE MODE (Real Earning Commercial Ads)
   if (isLiveMode) {
     if (isUnfilled) {
-      return null; // Collapse cleanly without leaving an empty white void
+      return null; // Collapse cleanly without leaving an empty space or layout jump
     }
 
     return (
-      <div className={`adsense-wrapper my-3 text-center overflow-hidden transition-all duration-300 ${className}`}>
-        <div className="flex items-center justify-center gap-1.5 mb-1 text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
-          <span>Ad</span>
-          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
-          <span>Google AdSense</span>
-        </div>
+      <div
+        className={`adsense-wrapper text-center overflow-hidden transition-all duration-300 ${
+          isFilled ? 'my-3 opacity-100' : 'h-0 opacity-0 overflow-hidden m-0 p-0 pointer-events-none'
+        } ${className}`}
+      >
+        {isFilled && (
+          <div className="flex items-center justify-center gap-1.5 mb-1.5 text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-semibold">
+            <span>Ad</span>
+            <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
+            <span>Google AdSense</span>
+          </div>
+        )}
         <div className="w-full flex items-center justify-center bg-transparent rounded-xl overflow-hidden">
           <ins
             ref={adRef}
