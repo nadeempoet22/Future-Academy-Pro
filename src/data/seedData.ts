@@ -14,10 +14,10 @@ export const initialSiteSettings: SiteSettings = {
   announcementText: '🔥 New FPSC & PPSC Mock Tests 2026 added! Take the Daily Quiz to boost your score.',
   isAnnouncementActive: true,
   adConfig: {
-    adsenseEnabled: false,
-    publisherId: '',
-    autoAdsEnabled: false,
-    testMode: true,
+    adsenseEnabled: true,
+    publisherId: 'pub-4706243710762689',
+    autoAdsEnabled: true,
+    testMode: false,
     headerBannerEnabled: true,
     headerSlotId: '',
     sidebarAdEnabled: true,
@@ -28,7 +28,7 @@ export const initialSiteSettings: SiteSettings = {
     quizSlotId: '',
     stickyBottomAdEnabled: false,
     stickyBottomSlotId: '',
-    adsTxtContent: '',
+    adsTxtContent: 'google.com, pub-4706243710762689, DIRECT, f08c47fec0942fa0',
     customHeaderAdHtml: ''
   },
   certificatePayment: {
