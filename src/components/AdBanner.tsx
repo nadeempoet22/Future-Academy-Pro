@@ -54,7 +54,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ type, adConfig, className = 
       default:
         return undefined;
     }
-  })();
+  })() || '7523650189';
 
   const formatAdClient = (raw?: string) => {
     if (!raw) return '';

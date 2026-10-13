@@ -103,15 +103,24 @@ export default function App() {
             parsed.certificatePayment = initialSiteSettings.certificatePayment;
             updated = true;
           }
-          if (parsed && (!parsed.adConfig || !parsed.adConfig.publisherId || parsed.adConfig.publisherId.includes('0000000000000000') || !parsed.adConfig.adsenseEnabled)) {
-            parsed.adConfig = {
-              ...initialSiteSettings.adConfig,
-              ...(parsed.adConfig || {}),
-              adsenseEnabled: true,
-              publisherId: 'pub-4706243710762689',
-              testMode: false
-            };
-            updated = true;
+          if (parsed) {
+            if (!parsed.adConfig || !parsed.adConfig.publisherId || parsed.adConfig.publisherId.includes('0000000000000000') || !parsed.adConfig.adsenseEnabled) {
+              parsed.adConfig = {
+                ...initialSiteSettings.adConfig,
+                ...(parsed.adConfig || {}),
+                adsenseEnabled: true,
+                publisherId: 'pub-4706243710762689',
+                testMode: false
+              };
+              updated = true;
+            }
+            if (parsed.adConfig && !parsed.adConfig.headerSlotId) {
+              parsed.adConfig.headerSlotId = '7523650189';
+              parsed.adConfig.sidebarSlotId = parsed.adConfig.sidebarSlotId || '7523650189';
+              parsed.adConfig.inContentSlotId = parsed.adConfig.inContentSlotId || '7523650189';
+              parsed.adConfig.quizSlotId = parsed.adConfig.quizSlotId || '7523650189';
+              updated = true;
+            }
           }
           if (updated) {
             localStorage.setItem('futureacademy_settings', JSON.stringify(parsed));
