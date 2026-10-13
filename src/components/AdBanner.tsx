@@ -42,7 +42,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ type, adConfig, className = 
   const slotId = (() => {
     switch (type) {
       case 'header':
-        return adConfig?.headerSlotId?.trim();
+        return adConfig?.headerSlotId?.trim() || '4059434933';
       case 'sidebar':
         return adConfig?.sidebarSlotId?.trim();
       case 'inContent':

@@ -15,11 +15,11 @@ export const initialSiteSettings: SiteSettings = {
   isAnnouncementActive: true,
   adConfig: {
     adsenseEnabled: true,
-    publisherId: 'pub-4706243710762689',
+    publisherId: 'ca-pub-4706243710762689',
     autoAdsEnabled: true,
     testMode: false,
     headerBannerEnabled: true,
-    headerSlotId: '7523650189',
+    headerSlotId: '4059434933',
     sidebarAdEnabled: true,
     sidebarSlotId: '7523650189',
     inContentAdEnabled: true,

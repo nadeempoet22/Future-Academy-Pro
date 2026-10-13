@@ -109,17 +109,36 @@ export default function App() {
                 ...initialSiteSettings.adConfig,
                 ...(parsed.adConfig || {}),
                 adsenseEnabled: true,
-                publisherId: 'pub-4706243710762689',
+                publisherId: 'ca-pub-4706243710762689',
                 testMode: false
               };
               updated = true;
             }
-            if (parsed.adConfig && !parsed.adConfig.headerSlotId) {
-              parsed.adConfig.headerSlotId = '7523650189';
-              parsed.adConfig.sidebarSlotId = parsed.adConfig.sidebarSlotId || '7523650189';
-              parsed.adConfig.inContentSlotId = parsed.adConfig.inContentSlotId || '7523650189';
-              parsed.adConfig.quizSlotId = parsed.adConfig.quizSlotId || '7523650189';
-              updated = true;
+            if (parsed.adConfig) {
+              if (parsed.adConfig.publisherId !== 'ca-pub-4706243710762689' && parsed.adConfig.publisherId.includes('4706243710762689')) {
+                parsed.adConfig.publisherId = 'ca-pub-4706243710762689';
+                updated = true;
+              }
+              if (!parsed.adConfig.headerSlotId || parsed.adConfig.headerSlotId === '7523650189') {
+                parsed.adConfig.headerSlotId = '4059434933';
+                updated = true;
+              }
+              if (!parsed.adConfig.sidebarSlotId) {
+                parsed.adConfig.sidebarSlotId = '7523650189';
+                updated = true;
+              }
+              if (!parsed.adConfig.inContentSlotId) {
+                parsed.adConfig.inContentSlotId = '7523650189';
+                updated = true;
+              }
+              if (!parsed.adConfig.quizSlotId) {
+                parsed.adConfig.quizSlotId = '7523650189';
+                updated = true;
+              }
+              if (!parsed.adConfig.stickyBottomSlotId) {
+                parsed.adConfig.stickyBottomSlotId = '7523650189';
+                updated = true;
+              }
             }
           }
           if (updated) {
