@@ -1192,6 +1192,25 @@ Output ONLY valid JSON array with format:
     res.send(`User-agent: *\nAllow: /\nSitemap: https://${host}/sitemap.xml`);
   });
 
+  // Google AdSense verification ads.txt endpoint
+  app.get('/ads.txt', (req, res) => {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    const configuredPub = siteSettings?.adConfig?.publisherId?.trim();
+    if (configuredPub && configuredPub.length > 5) {
+      const cleanPub = configuredPub.replace(/^ca-/, '').replace(/^pub-/, '');
+      return res.send(`# Google AdSense Authorized Digital Sellers (ads.txt)\n# Future Academy Pro\ngoogle.com, pub-${cleanPub}, DIRECT, f08c47fec0942fa0\n`);
+    }
+
+    const adsTxtPath = path.join(process.cwd(), 'public', 'ads.txt');
+    if (fs.existsSync(adsTxtPath)) {
+      res.sendFile(adsTxtPath);
+    } else {
+      res.send('# Google AdSense Authorized Digital Sellers (ads.txt)\ngoogle.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0\n');
+    }
+  });
+
   app.get('/favicon.ico', (req, res) => {
     res.redirect(301, '/favicon.svg');
   });

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { MCQ, QuizResult, CertificatePaymentConfig } from '../types';
+import { MCQ, QuizResult, CertificatePaymentConfig, AdConfig } from '../types';
+import { AdBanner } from './AdBanner';
 import {
   Clock,
   CheckCircle,
@@ -41,6 +42,7 @@ interface QuizModalProps {
   paymentConfig?: CertificatePaymentConfig;
   allQuestions?: MCQ[];
   onShuffleNewQuiz?: () => void;
+  adConfig?: AdConfig;
 }
 
 export const QuizModal: React.FC<QuizModalProps> = ({
@@ -53,7 +55,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onQuizComplete,
   paymentConfig,
   allQuestions,
-  onShuffleNewQuiz
+  onShuffleNewQuiz,
+  adConfig
 }) => {
   const [candidateName, setCandidateName] = useState<string>(() => {
     try {
@@ -834,6 +837,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                       </span>
                     </div>
                   </div>
+
+                  {/* Google AdSense Quiz Result Banner */}
+                  <AdBanner type="quiz" adConfig={adConfig} />
 
                   {/* Tab Navigation: Certificate vs Review */}
                   <div className="flex items-center justify-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl max-w-sm mx-auto border border-slate-200 dark:border-slate-700 text-xs font-bold">

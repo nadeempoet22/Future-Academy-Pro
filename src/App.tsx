@@ -1195,6 +1195,7 @@ export default function App() {
         allQuestions={allLocalMcqs.length > 0 ? allLocalMcqs : initialMcqs}
         onQuizComplete={handleQuizComplete}
         paymentConfig={settings.certificatePayment}
+        adConfig={settings.adConfig}
       />
 
       {/* AI Smart Search Modal */}

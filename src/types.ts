@@ -111,10 +111,21 @@ export interface BlogPost {
 }
 
 export interface AdConfig {
+  adsenseEnabled: boolean;
+  publisherId: string;
+  autoAdsEnabled: boolean;
+  testMode: boolean;
   headerBannerEnabled: boolean;
+  headerSlotId?: string;
   sidebarAdEnabled: boolean;
+  sidebarSlotId?: string;
   inContentAdEnabled: boolean;
+  inContentSlotId?: string;
+  quizAdEnabled: boolean;
+  quizSlotId?: string;
   stickyBottomAdEnabled: boolean;
+  stickyBottomSlotId?: string;
+  adsTxtContent?: string;
   customHeaderAdHtml?: string;
 }
 

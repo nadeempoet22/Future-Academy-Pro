@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MCQ, Category, SiteSettings, Option, CertificatePaymentSubmission } from '../types';
 import { enrichCategoriesWithLiveCounts, countMcqsForCategory, isMcqInCategory } from '../utils/categoryHelper';
+import { AdBanner } from './AdBanner';
 import {
   ShieldCheck,
   Plus,
@@ -336,8 +337,59 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [adminCatFilter, setAdminCatFilter] = useState('All');
 
   // Site Settings Form State
-  const [siteForm, setSiteForm] = useState<SiteSettings>(settings);
+  const [siteForm, setSiteForm] = useState<SiteSettings>(() => ({
+    ...settings,
+    adConfig: {
+      adsenseEnabled: false,
+      publisherId: '',
+      autoAdsEnabled: false,
+      testMode: true,
+      headerBannerEnabled: true,
+      headerSlotId: '',
+      sidebarAdEnabled: true,
+      sidebarSlotId: '',
+      inContentAdEnabled: true,
+      inContentSlotId: '',
+      quizAdEnabled: true,
+      quizSlotId: '',
+      stickyBottomAdEnabled: false,
+      stickyBottomSlotId: '',
+      adsTxtContent: '',
+      customHeaderAdHtml: '',
+      ...(settings?.adConfig || {})
+    }
+  }));
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [copiedAdsTxt, setCopiedAdsTxt] = useState(false);
+  const [adPreviewType, setAdPreviewType] = useState<'header' | 'sidebar' | 'inContent' | 'quiz'>('header');
+
+  // Sync siteForm when settings change from Cloud
+  useEffect(() => {
+    if (settings) {
+      setSiteForm(prev => ({
+        ...settings,
+        adConfig: {
+          adsenseEnabled: false,
+          publisherId: '',
+          autoAdsEnabled: false,
+          testMode: true,
+          headerBannerEnabled: true,
+          headerSlotId: '',
+          sidebarAdEnabled: true,
+          sidebarSlotId: '',
+          inContentAdEnabled: true,
+          inContentSlotId: '',
+          quizAdEnabled: true,
+          quizSlotId: '',
+          stickyBottomAdEnabled: false,
+          stickyBottomSlotId: '',
+          adsTxtContent: '',
+          customHeaderAdHtml: '',
+          ...(settings.adConfig || {})
+        }
+      }));
+    }
+  }, [settings]);
 
   // Bulk Import State (CSV & JSON)
   const [bulkTargetCategory, setBulkTargetCategory] = useState<string>('__file__');
@@ -2198,75 +2250,473 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* Tab: AdSense Ads Settings */}
+      {/* Tab: Google AdSense & Monetization Hub */}
       {activeTab === 'ads' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-6">
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">
-            Monetization & AdSense Banner Controls
-          </h3>
-
-          <div className="space-y-4">
-            <label className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div>
-                <span className="text-xs font-bold block">Top Header Banner Ad</span>
-                <span className="text-[11px] text-slate-400">Displays sponsored banner above hero section</span>
+        <div className="space-y-6">
+          {/* Header Status Banner */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <Megaphone className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Google AdSense & Monetization Hub
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Official Google AdSense integration, responsive ad units, and ads.txt verification file.
+                  </p>
+                </div>
               </div>
-              <input
-                type="checkbox"
-                checked={siteForm.adConfig.headerBannerEnabled}
-                onChange={e =>
-                  setSiteForm({
-                    ...siteForm,
-                    adConfig: { ...siteForm.adConfig, headerBannerEnabled: e.target.checked }
-                  })
-                }
-                className="w-4 h-4 text-emerald-600 rounded"
-              />
-            </label>
 
-            <label className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div>
-                <span className="text-xs font-bold block">Sidebar Ad Block</span>
-                <span className="text-[11px] text-slate-400">Displays sponsored box in right sidebar</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={siteForm.adConfig.sidebarAdEnabled}
-                onChange={e =>
-                  setSiteForm({
-                    ...siteForm,
-                    adConfig: { ...siteForm.adConfig, sidebarAdEnabled: e.target.checked }
-                  })
-                }
-                className="w-4 h-4 text-emerald-600 rounded"
-              />
-            </label>
+              {/* Live Status Pill */}
+              <div className="flex items-center gap-2">
+                {siteForm.adConfig.adsenseEnabled ? (
+                  siteForm.adConfig.testMode ? (
+                    <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                      Sandbox / Test Mode Active
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      🟢 Live AdSense Ads Active
+                    </span>
+                  )
+                ) : (
+                  <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                    ⚪ AdSense Disabled
+                  </span>
+                )}
 
-            <label className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <div>
-                <span className="text-xs font-bold block">In-Content MCQ Ad</span>
-                <span className="text-[11px] text-slate-400">Displays inline text ad between MCQs</span>
+                <a
+                  href="https://www.google.com/adsense"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1"
+                >
+                  AdSense Console <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
-              <input
-                type="checkbox"
-                checked={siteForm.adConfig.inContentAdEnabled}
-                onChange={e =>
-                  setSiteForm({
-                    ...siteForm,
-                    adConfig: { ...siteForm.adConfig, inContentAdEnabled: e.target.checked }
-                  })
-                }
-                className="w-4 h-4 text-emerald-600 rounded"
-              />
-            </label>
+            </div>
+
+            {/* Core Credentials & Master Toggles */}
+            <div className="pt-5 space-y-5">
+              {/* Master Enable Checkbox */}
+              <label className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-emerald-500/40 transition">
+                <div>
+                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100 block">
+                    Enable Google AdSense (پورے ویب سائٹ پر ایڈسینس فعال کریں)
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Master switch for all Google ads across Future Academy Pro
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={siteForm.adConfig.adsenseEnabled}
+                  onChange={e =>
+                    setSiteForm({
+                      ...siteForm,
+                      adConfig: { ...siteForm.adConfig, adsenseEnabled: e.target.checked }
+                    })
+                  }
+                  className="w-5 h-5 text-emerald-600 rounded accent-emerald-600 cursor-pointer"
+                />
+              </label>
+
+              {/* Publisher ID Input */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                    Google AdSense Publisher ID (Client ID)
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    Example: <code className="text-emerald-600 dark:text-emerald-400">ca-pub-1234567890123456</code>
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={siteForm.adConfig.publisherId || ''}
+                  onChange={e =>
+                    setSiteForm({
+                      ...siteForm,
+                      adConfig: { ...siteForm.adConfig, publisherId: e.target.value.trim() }
+                    })
+                  }
+                  placeholder="ca-pub-XXXXXXXXXXXXXXXX"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Yeh ID aapke AdSense account ke <strong>Account &gt; Settings &gt; Account information</strong> page par likhi hoti hai.
+                </p>
+              </div>
+
+              {/* Sandbox & Auto Ads Toggles Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="flex items-start justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                  <div className="pr-3">
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block mb-0.5">
+                      Test Mode (Sandbox / Preview)
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block leading-relaxed">
+                      Recommended: Account approve hone tak test mode ON rakhein taake policy compliance barkarar rahe.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={siteForm.adConfig.testMode}
+                    onChange={e =>
+                      setSiteForm({
+                        ...siteForm,
+                        adConfig: { ...siteForm.adConfig, testMode: e.target.checked }
+                      })
+                    }
+                    className="w-4 h-4 text-emerald-600 rounded accent-emerald-600 mt-1 cursor-pointer"
+                  />
+                </label>
+
+                <label className="flex items-start justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                  <div className="pr-3">
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block mb-0.5">
+                      Google Auto Ads (خودکار اشتہارات)
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block leading-relaxed">
+                      Google AI khud ba khud high-performing spots par responsive ads render karega.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={siteForm.adConfig.autoAdsEnabled}
+                    onChange={e =>
+                      setSiteForm({
+                        ...siteForm,
+                        adConfig: { ...siteForm.adConfig, autoAdsEnabled: e.target.checked }
+                      })
+                    }
+                    className="w-4 h-4 text-emerald-600 rounded accent-emerald-600 mt-1 cursor-pointer"
+                  />
+                </label>
+              </div>
+            </div>
           </div>
 
-          <button
-            onClick={handleSaveSettings}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow"
-          >
-            Save Ad Settings
-          </button>
+          {/* Ad Placements & Slot IDs */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-sm">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Layers className="w-4 h-4 text-emerald-500" />
+              Ad Unit Placements &amp; Slot IDs
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Har placement ke liye alag AdSense slot ID enter karein ya default responsive ad units istemal karein:
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              {/* 1. Header Leaderboard */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold block text-slate-800 dark:text-slate-200">
+                      1. Top Header Banner
+                    </span>
+                    <span className="text-[11px] text-slate-400">728x90 Leaderboard / Responsive</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={siteForm.adConfig.headerBannerEnabled}
+                    onChange={e =>
+                      setSiteForm({
+                        ...siteForm,
+                        adConfig: { ...siteForm.adConfig, headerBannerEnabled: e.target.checked }
+                      })
+                    }
+                    className="w-4 h-4 text-emerald-600 rounded accent-emerald-600 cursor-pointer"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={siteForm.adConfig.headerSlotId || ''}
+                  onChange={e =>
+                    setSiteForm({
+                      ...siteForm,
+                      adConfig: { ...siteForm.adConfig, headerSlotId: e.target.value.trim() }
+                    })
+                  }
+                  placeholder="Header Slot ID (e.g. 1234567890)"
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono"
+                />
+              </div>
+
+              {/* 2. In-Feed MCQ Ad */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold block text-slate-800 dark:text-slate-200">
+                      2. In-Feed (Between MCQs)
+                    </span>
+                    <span className="text-[11px] text-slate-400">Native In-Article / Fluid (Highest CTR)</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={siteForm.adConfig.inContentAdEnabled}
+                    onChange={e =>
+                      setSiteForm({
+                        ...siteForm,
+                        adConfig: { ...siteForm.adConfig, inContentAdEnabled: e.target.checked }
+                      })
+                    }
+                    className="w-4 h-4 text-emerald-600 rounded accent-emerald-600 cursor-pointer"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={siteForm.adConfig.inContentSlotId || ''}
+                  onChange={e =>
+                    setSiteForm({
+                      ...siteForm,
+                      adConfig: { ...siteForm.adConfig, inContentSlotId: e.target.value.trim() }
+                    })
+                  }
+                  placeholder="In-Feed Slot ID (e.g. 2345678901)"
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono"
+                />
+              </div>
+
+              {/* 3. Sidebar Ad Block */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold block text-slate-800 dark:text-slate-200">
+                      3. Right Sidebar Ad Unit
+                    </span>
+                    <span className="text-[11px] text-slate-400">300x250 Medium Rectangle</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={siteForm.adConfig.sidebarAdEnabled}
+                    onChange={e =>
+                      setSiteForm({
+                        ...siteForm,
+                        adConfig: { ...siteForm.adConfig, sidebarAdEnabled: e.target.checked }
+                      })
+                    }
+                    className="w-4 h-4 text-emerald-600 rounded accent-emerald-600 cursor-pointer"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={siteForm.adConfig.sidebarSlotId || ''}
+                  onChange={e =>
+                    setSiteForm({
+                      ...siteForm,
+                      adConfig: { ...siteForm.adConfig, sidebarSlotId: e.target.value.trim() }
+                    })
+                  }
+                  placeholder="Sidebar Slot ID (e.g. 3456789012)"
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono"
+                />
+              </div>
+
+              {/* 4. Quiz Results & Scorecard Ad */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold block text-slate-800 dark:text-slate-200">
+                      4. Practice Quiz Results Ad
+                    </span>
+                    <span className="text-[11px] text-slate-400">Appears on exam scorecard screen</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={siteForm.adConfig.quizAdEnabled}
+                    onChange={e =>
+                      setSiteForm({
+                        ...siteForm,
+                        adConfig: { ...siteForm.adConfig, quizAdEnabled: e.target.checked }
+                      })
+                    }
+                    className="w-4 h-4 text-emerald-600 rounded accent-emerald-600 cursor-pointer"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={siteForm.adConfig.quizSlotId || ''}
+                  onChange={e =>
+                    setSiteForm({
+                      ...siteForm,
+                      adConfig: { ...siteForm.adConfig, quizSlotId: e.target.value.trim() }
+                    })
+                  }
+                  placeholder="Quiz Slot ID (e.g. 4567890123)"
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ads.txt Verification Card */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <FileCode className="w-4 h-4 text-emerald-500" />
+                Google AdSense Verification: ads.txt File
+              </h4>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pubIdClean = (siteForm.adConfig.publisherId || 'pub-0000000000000000').replace(/^ca-/, '');
+                    const snippet = `google.com, ${pubIdClean}, DIRECT, f08c47fec0942fa0`;
+                    navigator.clipboard.writeText(snippet);
+                    setCopiedAdsTxt(true);
+                    setTimeout(() => setCopiedAdsTxt(false), 2500);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5"
+                >
+                  {copiedAdsTxt ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedAdsTxt ? 'Copied!' : 'Copy ads.txt'}
+                </button>
+
+                <a
+                  href="/ads.txt"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 transition flex items-center gap-1.5"
+                >
+                  View Live /ads.txt <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-900 text-slate-100 font-mono text-xs overflow-x-auto border border-slate-800 flex items-center justify-between">
+              <code>
+                google.com, {(siteForm.adConfig.publisherId || 'pub-0000000000000000').replace(/^ca-/, '')}, DIRECT, f08c47fec0942fa0
+              </code>
+              <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800 shrink-0 ml-3">
+                Auto-Configured
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              Google AdSense verification ke waqt aapki domain par <code className="text-emerald-600 dark:text-emerald-400 font-mono">/ads.txt</code> check karta hai. Ye file Future Academy Pro me automated serve ho rahi hai.
+            </p>
+          </div>
+
+          {/* Step-by-Step Approval Guide */}
+          <div className="bg-gradient-to-br from-emerald-950/10 via-slate-900/30 to-teal-950/10 rounded-2xl border border-emerald-500/20 p-6 space-y-4">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-500" />
+              Google AdSense Approval Step-by-Step Guide (مرحلہ وار طریقہ کار)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800">
+                <div className="w-6 h-6 rounded-lg bg-emerald-500 text-white font-bold flex items-center justify-center text-xs mb-2">
+                  1
+                </div>
+                <strong className="block text-slate-900 dark:text-white mb-1">Sign Up on AdSense</strong>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  www.google.com/adsense par account banayein aur apni site URL add karein.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800">
+                <div className="w-6 h-6 rounded-lg bg-emerald-500 text-white font-bold flex items-center justify-center text-xs mb-2">
+                  2
+                </div>
+                <strong className="block text-slate-900 dark:text-white mb-1">Get Publisher ID</strong>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  Apna <code>ca-pub-XXXXXXXXXX</code> copy karein aur upar diye gaye box mein paste karein.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800">
+                <div className="w-6 h-6 rounded-lg bg-emerald-500 text-white font-bold flex items-center justify-center text-xs mb-2">
+                  3
+                </div>
+                <strong className="block text-slate-900 dark:text-white mb-1">Save Settings</strong>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  "Save AdSense Settings" dabayein taake ads.txt aur ad units update ho jayen.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800">
+                <div className="w-6 h-6 rounded-lg bg-emerald-500 text-white font-bold flex items-center justify-center text-xs mb-2">
+                  4
+                </div>
+                <strong className="block text-slate-900 dark:text-white mb-1">Request Review</strong>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  AdSense par "Submit for review" karein. Site review hone par real ads live ho jayengi!
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Live Ad Unit Preview */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Eye className="w-4 h-4 text-emerald-500" />
+                Live Ad Preview (کیسا نظر آئے گا)
+              </h4>
+              <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setAdPreviewType('header')}
+                  className={`px-3 py-1 rounded-lg transition ${
+                    adPreviewType === 'header' ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Header Banner
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdPreviewType('inContent')}
+                  className={`px-3 py-1 rounded-lg transition ${
+                    adPreviewType === 'inContent' ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  In-Feed MCQ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdPreviewType('sidebar')}
+                  className={`px-3 py-1 rounded-lg transition ${
+                    adPreviewType === 'sidebar' ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Sidebar Unit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdPreviewType('quiz')}
+                  className={`px-3 py-1 rounded-lg transition ${
+                    adPreviewType === 'quiz' ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Quiz Result
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
+              <AdBanner type={adPreviewType} adConfig={siteForm.adConfig} />
+            </div>
+          </div>
+
+          {/* Action Bar */}
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Settings automatically sync to Cloud Firestore and all active visitors.
+            </span>
+
+            <button
+              onClick={handleSaveSettings}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-md shadow-emerald-600/20 flex items-center gap-2 transition active:scale-[0.99]"
+            >
+              <Save className="w-4 h-4" /> Save AdSense Settings
+            </button>
+          </div>
         </div>
       )}
 
