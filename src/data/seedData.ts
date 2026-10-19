@@ -15,7 +15,7 @@ export const initialSiteSettings: SiteSettings = {
   isAnnouncementActive: true,
   adConfig: {
     adsenseEnabled: true,
-    publisherId: 'ca-pub-4706243710762689',
+    publisherId: 'pub-4706243710762689',
     autoAdsEnabled: true,
     testMode: false,
     headerBannerEnabled: true,
